@@ -11,6 +11,12 @@
     .obs-anchor { display:inline; }
     .markdown-section { max-width: 920px; }
     .missing-link { color:#999; }
+    /* footnotes */
+    .fn-ref { font-size: .72em; vertical-align: super; }
+    .fn-ref a, .fn-back { color: #2c662d; text-decoration: none; }
+    .footnotes { font-size: .9em; color: #555; margin-top: 2em; }
+    .footnotes ol { padding-left: 1.6em; }
+    .fn-back { margin-left: .35em; }
   </style>
 </head>
 <body>
@@ -63,26 +69,111 @@
     return '<a href="' + href + '" class="wikilink">' + label + '</a>';
   }
 
-  // Transform raw markdown: wikilinks + standalone Obsidian block anchors.
-  // Fenced code blocks (```) are left untouched. The (?!\]) lookahead lets a
-  // wikilink terminate correctly even when its embedded attributes contain
-  // square brackets (e.g. data-source="1343|[2]]]").
+  // --- Footnotes ---------------------------------------------------------
+  // Obsidian / Markdown footnotes: [^label] reference, [^label]: definition.
+  // docsify's markdown engine (marked) does not support them, so we convert
+  // them to HTML here. Definitions are gathered page-wide (they may sit in a
+  // different paragraph than the references) and re-emitted as one block.
+  function extractFootnoteDefs(seg) {
+    var lines = seg.split('\n');
+    var defs = {}, order = [], out = [];
+    var i = 0, n = lines.length;
+    while (i < n) {
+      var m = lines[i].match(/^(\s*)\[\^([^\]]+)\]:\s?(.*)$/);
+      if (m) {
+        var label = m[2], body = m[3];
+        var j = i + 1;
+        while (j < n && /^\s/.test(lines[j])) { body += '\n' + lines[j].replace(/^\s+/, ''); j++; }
+        if (!(label in defs)) order.push(label);
+        defs[label] = (label in defs ? defs[label] + '\n' + body : body);
+        i = j; continue;
+      }
+      out.push(lines[i]); i++;
+    }
+    return { defs: defs, order: order, body: out.join('\n') };
+  }
+
+  // --- Main transform ----------------------------------------------------
+  // Applies, in order: footnotes, wikilinks, block-anchors. Fenced code
+  // blocks (```) are left untouched. The (?!\]) lookahead lets a wikilink
+  // terminate correctly even when its embedded attributes contain square
+  // brackets (e.g. data-source="1343|[2]]]"). Footnotes run first so the
+  // caret in [^label] is consumed here, never mistaken for a block-anchor.
   function transform(content) {
     if (typeof content !== 'string') return content;
-    var segments = content.split('```');
-    for (var i = 0; i < segments.length; i++) {
-      if (i % 2 === 1) continue; // inside a fenced code block
-      var seg = segments[i];
+    var parts = content.split('```');
+    var allDefs = {}, order = [];
+
+    // 1) pull footnote definitions out of every non-code segment
+    for (var i = 0; i < parts.length; i++) {
+      if (i % 2 === 1) continue;
+      var r = extractFootnoteDefs(parts[i]);
+      for (var k = 0; k < r.order.length; k++) {
+        var lb = r.order[k];
+        if (!(lb in allDefs)) { order.push(lb); allDefs[lb] = r.defs[lb]; }
+      }
+      parts[i] = r.body;
+    }
+
+    // 2) convert footnote references to clickable <sup> links
+    for (var i = 0; i < parts.length; i++) {
+      if (i % 2 === 1) continue;
+      parts[i] = parts[i].replace(/\[\^([^\]]+)\]/g, function (m, label) {
+        if (allDefs.hasOwnProperty(label)) {
+          return '<sup class="fn-ref"><a href="#fn-' + label + '" id="fnref-' + label + '">[' + label + ']</a></sup>';
+        }
+        return '[' + label + ']';
+      });
+    }
+
+    // 3) wikilinks + standalone block-anchors
+    for (var i = 0; i < parts.length; i++) {
+      if (i % 2 === 1) continue;
+      var seg = parts[i];
       seg = seg.replace(/\[\[([\s\S]*?)\]\](?!\])/g, function (m, inner) {
         return convertWikilink(inner);
       });
       seg = seg.replace(/\^([A-Za-z0-9][A-Za-z0-9\-]*)/g, function (m, id) {
         return '<span id="' + id + '" class="obs-anchor"></span>';
       });
-      segments[i] = seg;
+      parts[i] = seg;
     }
-    return segments.join('```');
+
+    var result = parts.join('```');
+
+    // 4) emit a single footnotes block at the end of the page
+    if (order.length) {
+      var blk = '\n\n<hr class="footnotes-sep">\n\n<section class="footnotes">\n\n<ol>\n';
+      for (var k = 0; k < order.length; k++) {
+        var l = order[k];
+        blk += '<li id="fn-' + l + '">' + allDefs[l] + ' <a href="#fnref-' + l + '" class="fn-back">↩</a></li>\n';
+      }
+      blk += '</ol>\n\n</section>\n';
+      // also convert any wikilinks / anchors inside the definitions
+      blk = blk.replace(/\[\[([\s\S]*?)\]\](?!\])/g, function (m, inner) { return convertWikilink(inner); });
+      blk = blk.replace(/\^([A-Za-z0-9][A-Za-z0-9\-]*)/g, function (m, id) { return '<span id="' + id + '" class="obs-anchor"></span>'; });
+      result += blk;
+    }
+    return result;
   }
+
+  // Footnote links are same-page anchors. docsify would otherwise treat the
+  // bare "#fn-1" hash as a route and 404, so we intercept the click in the
+  // capture phase (before docsify's own handler) and scroll natively.
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    var a = (t && t.closest) ? t.closest('a.fn-ref, a.fn-back') : null;
+    if (!a) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    var href = a.getAttribute('href') || '';
+    var id = href.charAt(0) === '#' ? href.slice(1) : href;
+    var el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (history.replaceState) history.replaceState(null, '', '#' + id);
+    }
+  }, true);
 
   window.$docsify = {
     name: '瑜伽師地論 · DILA 校勘注記',
