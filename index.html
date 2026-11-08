@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>瑜伽師地論 · DILA 校勘注記</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="vendor_vue.css">
+  <style>
+    .wikilink { color:#2c662d; border-bottom:1px dotted #2c662d; text-decoration:none; }
+    .wikilink:hover { background:#eaf6ea; }
+    .obs-anchor { display:inline; }
+    .markdown-section { max-width: 920px; }
+    .missing-link { color:#999; }
+  </style>
+</head>
+<body>
+  <div id="app">載入中…</div>
+  <script src="vendor_docsify.min.js"></script>
+  <script src="vendor_search.min.js"></script>
+  <script>
+  // Known wikilink targets that have no corresponding page in this vault.
+  // They are rendered as plain text instead of dead links.
+  var MISSING_TARGETS = {
+    "檔名": 1,
+    "T1828D10-18001-k": 1,
+    "T1828D11-21108-k": 1,
+    "T1828D16-43201-k": 1,
+    "T1828D17-48201-k": 1,
+    "T1828D18-45201-k": 1
+  };
+
+  // Convert a single Obsidian wikilink [[target#^anchor|label]] -> docsify <a>.
+  // Wikilinks may embed Obsidian attributes (data-page / data-source); those are
+  // ignored — only target + anchor are used for the link.
+  function convertWikilink(inner) {
+    var bar = inner.indexOf('|');
+    var body = (bar >= 0 ? inner.slice(0, bar) : inner).trim();
+    var label = (bar >= 0 ? inner.slice(bar + 1) : '').trim();
+
+    var hashIdx = body.indexOf('#');
+    var target = (hashIdx >= 0 ? body.slice(0, hashIdx) : body).trim();
+    var anchor = '';
+    if (hashIdx >= 0) {
+      var am = body.slice(hashIdx + 1).match(/\^?([A-Za-z0-9_\-]+)/);
+      if (am) anchor = am[1];
+    }
+
+    // Obsidian apparatus links often carry a numeric/bracket alias; use the
+    // page name as the visible label in that case.
+    if (!label || /^\[?\d+\]?$/.test(label)) label = target;
+
+    if (!target) {
+      // same-page anchor only
+      if (anchor) {
+        return '<a href="#/?id=' + anchor + '" class="wikilink">' + label + '</a>';
+      }
+      return label;
+    }
+    if (MISSING_TARGETS.hasOwnProperty(target)) {
+      return '<span class="missing-link">' + label + '</span>';
+    }
+    var href = '#/' + target + (anchor ? '?id=' + anchor : '');
+    return '<a href="' + href + '" class="wikilink">' + label + '</a>';
+  }
+
+  // Transform raw markdown: wikilinks + standalone Obsidian block anchors.
+  // Fenced code blocks (```) are left untouched. The (?!\]) lookahead lets a
+  // wikilink terminate correctly even when its embedded attributes contain
+  // square brackets (e.g. data-source="1343|[2]]]").
+  function transform(content) {
+    if (typeof content !== 'string') return content;
+    var segments = content.split('```');
+    for (var i = 0; i < segments.length; i++) {
+      if (i % 2 === 1) continue; // inside a fenced code block
+      var seg = segments[i];
+      seg = seg.replace(/\[\[([\s\S]*?)\]\](?!\])/g, function (m, inner) {
+        return convertWikilink(inner);
+      });
+      seg = seg.replace(/\^([A-Za-z0-9][A-Za-z0-9\-]*)/g, function (m, id) {
+        return '<span id="' + id + '" class="obs-anchor"></span>';
+      });
+      segments[i] = seg;
+    }
+    return segments.join('```');
+  }
+
+  window.$docsify = {
+    name: '瑜伽師地論 · DILA 校勘注記',
+    repo: 'avatarqz/yogacarabhumi-dila',
+    homepage: '索引.md',
+    loadSidebar: true,
+    subMaxLevel: 3,
+    auto2top: true,
+    relativePath: true,
+    search: {
+      maxAge: 86400000,
+      placeholder: '搜尋（全文）',
+      noData: '找不到結果',
+      depth: 6
+    },
+    plugins: [
+      function (hook, vm) {
+        hook.beforeEach(function (content, next) {
+          next(transform(content));
+        });
+      }
+    ]
+  };
+  </script>
+</body>
+</html>
