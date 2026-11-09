@@ -2,7 +2,7 @@
 
 - [首頁（總索引）](索引)
 
-- [《三摩呬多地》梵本對照（samāhitā bhūmiḥ）](samāhitā_bhūmiḥ_skt)
+- [《三摩呬多地》梵本對照（samāhitā bhūmiḥ）](samahita_bhumih_skt)
 
 - 大正藏（T）
   - T0099
