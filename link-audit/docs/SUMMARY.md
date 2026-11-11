@@ -285,7 +285,7 @@ bun run D:\2026\_scratch-ybh\bounds2.ts  D:/accelon3/wxzj.adb     # 同上；冊
 
 分析過程的一次性腳本（分級器、普查、閉合驗證、patch 產生器）仍在 `D:\2026\_scratch-ybh\`，未納入倉庫；第十節的重跑指令即指向該處。
 
-提交方式（已選定）：`link-audit/` 全目錄入庫，但**四個大 CSV 走 Git LFS**，靠倉庫根的 `.gitattributes` 四行指名規則（見 `.commit-prep/gitattributes.diff`）。在 scratch repo 實測結果：`broken-links-all.csv`（12.9 MB）、`needs-human.csv`（11.3 MB）、`sample-first-review.csv`（0.81 MB）、`auto-fixable.csv`（0.79 MB）暫存後成為 LFS 指針（開頭 `version https://git-lfs.github.com/spec/v1`），而 `target-summary.csv`（879 B）與 `pair-summary.csv`（3.9 KB）維持純文字 → GitHub Pages 仍能用 raw 直接讀這兩個。該檔刻意不含 `* text=auto`，因為倉庫已用 `core.autocrlf=input`，加了會使 518 個 `.md` 一次性換行正規化、把無關變更混進提交。
+提交方式（本輪定案）：`link-audit/` 全目錄入庫，**四個大 CSV 以普通 blob 提交、不走 LFS**。原因是 GitHub 不允許向公開 fork 上傳新的 LFS 物件（`batch response: ... can not upload new objects to public fork`），而本次交付是經 fork 開 PR；改走 LFS 需上游（有寫入權的人）先推一次 LFS 物件，或在合併前另做 `git lfs migrate`。工作區與 HEAD 內都確認 `broken-links-all.csv` 等四檔為完整 CSV 內容（首行 `source_file,line,…`），不是 `version https://git-lfs.github.com/spec/v1` 指針；`target-summary.csv`、`pair-summary.csv` 本來就沒被 LFS 管。倉庫已用 `core.autocrlf=input`，且**不要**加 `* text=auto`（會令 518 個 `.md` 一次性換行正規化、把無關變更混進提交）。代價是 history 增加約 25.8 MB；若之後要瘦身，`git lfs migrate import --include='link-audit/data/*.csv'` 可在上游端處理。
 
 套用 patch 的方式（路徑已隨本次整理更新）：
 
