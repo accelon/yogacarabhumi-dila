@@ -1,0 +1,35 @@
+kpD links walked: 248263
+broken w/ target file present: 74809
+
+  57155  MANUAL_TIER_OVERRUN|人工
+   7768  MANUAL_TIER_ABSENT|人工
+   3902  AUTO_UNIQUE_TEXT|AUTO
+   3228  SUGGEST_TEXT_FEW|抽樣後批次
+   1323  SUGGEST_SAMETIER_ONLY|抽樣後批次
+   1310  MANUAL_NO_EVIDENCE|人工
+    102  MANUAL_SENTINEL|人工
+     21  MANUAL_TEXT_AMBIG|人工
+
+AUTO: 3902
+抽樣後批次: 4551
+人工: 66356
+
+top pairs:
+  PXJ-H -> CT3267          n= 14382 auto= 1998 sample= 1975 human= 10409
+  T1579 -> CT3267          n=  5987 auto=  117 sample=  445 human=  5425
+  T1828 -> CT3267          n=  3542 auto=   15 sample=   53 human=  3474
+  AS-sP -> CT3283          n=  2283 auto=  106 sample=   77 human=  2100
+  T1605 -> CT3283          n=  2283 auto=  107 sample=   77 human=  2099
+  T1606 -> CT3283          n=  2283 auto=  107 sample=   77 human=  2099
+  AS-sP -> CT3282          n=  2282 auto=  106 sample=   77 human=  2099
+  T1605 -> CT3282          n=  2282 auto=  107 sample=   77 human=  2098
+  T1606 -> CT3282          n=  2282 auto=  107 sample=   77 human=  2098
+  T1581 -> CT3267          n=  2280 auto=   16 sample=  166 human=  2098
+  AS-sP -> AS-sG           n=  2212 auto=   70 sample=   99 human=  2043
+  T1605 -> AS-sG           n=  2212 auto=   71 sample=   99 human=  2042
+  T1606 -> AS-sG           n=  2212 auto=   71 sample=   99 human=  2042
+  Bo-SW -> CT3267          n=  2177 auto=   20 sample=  157 human=  2000
+  AS-sP -> CT3278          n=  2049 auto=  105 sample=   77 human=  1867
+  T1605 -> CT3278          n=  2049 auto=  106 sample=   77 human=  1866
+  T1606 -> CT3278          n=  2049 auto=  106 sample=   77 human=  1866
+  ASBhT -> CT3283          n=  1993 auto=   35 sample=   10 human=  1948

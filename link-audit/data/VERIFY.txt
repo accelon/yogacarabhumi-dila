@@ -1,0 +1,46 @@
+=== INDEPENDENT VERIFICATION OF auto-fixable.csv (3902 rows) ===
+rows checked: 3902
+line does not contain the link: 0 | suggested anchor not defined in target: 0 | target text != source text: 0 | text not unique in target: 0 | self-links: 0
+duplicate suggestions (same src->tgt->fix more than once): 425 extra rows 2814
+
+--- 10 verified examples (source context -> target definition) ---
+  [AUTO_UNIQUE_TEXT]
+    源文上下文: ###### N1 出體 ^kpD14-020
+    原連結   : AS-sP-1:4416  《[[AS-sG-1#^kpD14-020|AS-sG]]》
+    建議錨點: kpD15-062  ->  AS-sG-1:2767  ###### O1 出體 ^kpD15-062
+  [AUTO_UNIQUE_TEXT]
+    源文上下文: ###### N1 出體 ^kpD14-020
+    原連結   : AS-sP-1:4419  《[[CT3282-1#^kpD14-020|CT3282]]》
+    建議錨點: kpD15-062  ->  CT3282-1:3127  ###### O1 出體 ^kpD15-062
+  [AUTO_UNIQUE_TEXT]
+    源文上下文: ###### N1 出體 ^kpD14-020
+    原連結   : AS-sP-1:4420  《[[CT3283-1#^kpD14-020|CT3283]]》
+    建議錨點: kpD15-062  ->  CT3283-1:3304  ###### O1 出體 ^kpD15-062
+  [AUTO_UNIQUE_TEXT]
+    源文上下文: ###### M2 別釋 ^kpD13-024
+    原連結   : AS-sP-1:4442  《[[CT3282-1#^kpD13-024|CT3282]]》
+    建議錨點: kpD15-012  ->  CT3282-1:1232  ###### O2 別釋 ^kpD15-012
+  [AUTO_UNIQUE_TEXT]
+    源文上下文: ###### M2 別釋 ^kpD13-024
+    原連結   : AS-sP-1:4443  《[[CT3283-1#^kpD13-024|CT3283]]》
+    建議錨點: kpD15-012  ->  CT3283-1:1321  ###### O2 別釋 ^kpD15-012
+  [AUTO_UNIQUE_TEXT]
+    源文上下文: ###### L2 釋 ^kpD12-047
+    原連結   : AS-sP-1:6655  《[[CT3278-1#^kpD12-047|CT3278]]》
+    建議錨點: kpD10-027  ->  CT3278-1:4322  ###### J3 釋 ^kpD10-027
+  [AUTO_UNIQUE_TEXT]
+    源文上下文: ###### K1 徵 ^kpD11-134
+    原連結   : AS-sP-1:6931  《[[CT3278-1#^kpD11-134|CT3278]]》
+    建議錨點: kpD10-026  ->  CT3278-1:4309  ###### J2 徵 ^kpD10-026
+  [AUTO_UNIQUE_TEXT]
+    源文上下文: ###### K2 釋 ^kpD11-135
+    原連結   : AS-sP-1:6942  《[[CT3278-1#^kpD11-135|CT3278]]》
+    建議錨點: kpD10-027  ->  CT3278-1:4322  ###### J3 釋 ^kpD10-027
+  [AUTO_UNIQUE_TEXT]
+    源文上下文: ###### L1 總標 ^kpD12-059
+    原連結   : AS-sP-1:7176  《[[CT3278-1#^kpD12-059|CT3278]]》
+    建議錨點: kpD15-011  ->  CT3278-1:1309  ###### O1 總標 ^kpD15-011
+  [AUTO_UNIQUE_TEXT]
+    源文上下文: ###### L1 總標 ^kpD12-059
+    原連結   : AS-sP-1:7177  《[[CT3282-1#^kpD12-059|CT3282]]》
+    建議錨點: kpD15-011  ->  CT3282-1:1221  ###### O1 總標 ^kpD15-011

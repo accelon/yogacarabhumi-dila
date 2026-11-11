@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>瑜伽師地論庫 · 落空鏈分級儀表板</title>
+<style>
+:root{
+  --bg:#f7f7f5; --card:#fff; --line:#e3e3de; --txt:#22252a; --sub:#6b7280; --cap:#9aa0a6;
+  --pri:#2c662d; --ok:#2e7d32; --warn:#c98a00; --bad:#c0392b; --info:#2f6fb3; --bar:#6b57c9;
+}
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#1a1c1f; --card:#232629; --line:#34383d; --txt:#e8eaed; --sub:#a8b0ba; --cap:#7d848d;
+    --pri:#7ac77c; --ok:#5cb860; --warn:#e0a800; --bad:#e0655a; --info:#6ea8e0; --bar:#a894f0; }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",system-ui,sans-serif}
+.wrap{max-width:1080px;margin:0 auto;padding:1.5rem 1.1rem 3rem}
+h1{font-size:22px;font-weight:600;margin:0 0 .3rem}
+.sub{font-size:12px;color:var(--sub);margin:0 0 1.2rem}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:.7rem;margin-bottom:1.2rem}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:.85rem .95rem}
+.card .lb{font-size:12px;color:var(--sub);margin-bottom:.3rem}
+.card .v{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
+.card .s{font-size:11px;color:var(--cap);margin-top:.25rem;line-height:1.45}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:1rem 1.05rem 1.15rem;margin-bottom:1.1rem}
+.panel h2{font-size:16px;font-weight:600;margin:0 .4rem .25rem 0;display:inline}
+.tag{font-size:11px;color:var(--cap)}
+.note{font-size:12px;color:var(--sub);line-height:1.65;margin:.2rem 0 .85rem}
+.seg{display:flex;flex-wrap:wrap;gap:.35rem;margin-bottom:.8rem;align-items:center}
+.seg .lab{font-size:12px;color:var(--sub);margin-right:.15rem}
+button.m{padding:.28rem .68rem;font-size:12px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--sub);cursor:pointer}
+button.m.on{background:var(--pri);border-color:var(--pri);color:#fff}
+select{padding:.32rem .55rem;font-size:13px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--txt)}
+.rows{display:flex;flex-direction:column;gap:3px}
+.row{display:grid;grid-template-columns:96px 1fr 78px;align-items:center;gap:.5rem;font-size:12px;cursor:default}
+.row.clk{cursor:pointer}
+.row:hover .n{background:var(--line)}
+.n{background:var(--bg);border-radius:3px;height:16px;overflow:hidden;display:flex}
+.n i{display:block;height:100%}
+.k{font-size:11px;color:var(--sub);text-align:right;font-variant-numeric:tabular-nums}
+.lbl{color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cols{display:flex;align-items:flex-end;gap:2px;height:210px;padding-top:.4rem}
+.col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:3px;cursor:pointer}
+.col:hover b{opacity:1}
+.col b{font-size:10px;color:var(--txt);font-weight:500;opacity:0}
+.col i{display:block;width:100%;border-radius:2px 2px 0 0;min-height:1px}
+.col em{font-size:10px;color:var(--cap);font-style:normal}
+.stack{display:flex;height:26px;border-radius:6px;overflow:hidden;border:1px solid var(--line)}
+.stack i{display:block}
+.lg{display:flex;flex-wrap:wrap;gap:.7rem;margin-top:.6rem;font-size:12px;color:var(--sub)}
+.lg span{display:flex;align-items:center;gap:.3rem}
+.dot{width:9px;height:9px;border-radius:2px;display:inline-block}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:1.1rem}
+@media (max-width:760px){.grid2{grid-template-columns:1fr}.row{grid-template-columns:78px 1fr 64px}}
+.hint{font-size:11.5px;color:var(--cap);margin-top:.6rem;line-height:1.55}
+table{border-collapse:collapse;width:100%;font-size:12px;margin-top:.5rem}
+th,td{text-align:left;padding:.3rem .45rem;border-bottom:1px solid var(--line)}
+th{color:var(--sub);font-weight:500;font-size:11px}
+td.num{text-align:right;font-variant-numeric:tabular-nums}
+#tip{position:fixed;pointer-events:none;background:var(--txt);color:var(--bg);padding:.4rem .6rem;border-radius:6px;font-size:11.5px;line-height:1.5;opacity:0;transition:opacity .12s;z-index:9;max-width:290px}
+.foot{font-size:11.5px;color:var(--cap);line-height:1.7;margin-top:1rem}
+code{font-family:ui-monospace,Consolas,monospace;font-size:11.5px;background:var(--bg);padding:.05rem .3rem;border-radius:4px;border:1px solid var(--line)}
+</style>
+</head>
+<body>
+<div id="tip"></div>
+<div class="wrap">
+<h1>瑜伽師地論庫 · 落空鏈分級儀表板</h1>
+<p class="sub">資料來源 <code>avatarqz/yogacarabhumi-dila</code> 本地 clone（唯讀分析）· 口徑與 <code>broken-links-all.csv</code> 完全一致 · 各級合計 74,809 條 · 產出 2026-11-11</p>
+<div class="cards" id="cards"></div>
+
+<div class="panel">
+  <h2>一、文獻規模</h2><span class="tag">點上方按鈕切換度量</span>
+  <p class="note">全庫 49 個文獻系列。兩套《瑜伽師地論》全本（PXJ-H 披尋記、T1579 大正藏）字量佔全庫約 39%，但科判錨點数是 46,769 對 11,671——同一段經文兩套本子被切的刀數差四倍，這是落空鏈的第一個來源。切到「科判錨點數」看得最清楚。</p>
+  <div class="seg" id="seg1"></div>
+  <div class="rows" id="bars1"></div>
+</div>
+
+<div class="panel">
+  <h2>二、科判層級的密度錯配</h2><span class="tag">kpD{層級}-{流水號} 的 33 個層級</span>
+  <p class="note">錨點 id 是「該系列自己該層級的流水號」，跨系列直接比 id 本來就無意義。tier 9–19 是引用量與落空量雙高的區間；tier 5–8、25–31 被引用到的 max=999／9999 是佔位哨兵值，不是真的編到九百多段。滑過長條看該層細節。</p>
+  <div class="seg" id="seg2"></div>
+  <div class="cols" id="bars2"></div>
+</div>
+
+<div class="panel">
+  <h2>三、落空鏈分級</h2><span class="tag">74,809 條 · 依目標檔交叉篩選</span>
+  <p class="note">判定順序：哨兵 id → 該 id 全庫無定義 → 同系列僅一卷定義（指錯卷）→ 目標檔存在<b>全檔唯一同名科判標題</b>（AUTO，已逐條回原檔驗證）→ 僅同 tier 唯一／同名 2–3 個（抽樣）→ 目標無此層／超出該層最大序號／無信號（人工）。</p>
+  <div class="grid2">
+    <div>
+      <div class="stack" id="stack3"></div>
+      <div class="lg" id="lg3"></div>
+      <table id="tbl3"></table>
+    </div>
+    <div>
+      <div class="seg"><span class="lab">目標檔</span><select id="sel"></select></div>
+      <div class="rows" id="bars4"></div>
+      <div class="hint" id="hint4"></div>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>四、熱區目標</h2><span class="tag">點任一列 → 同步篩選第三節</span>
+  <p class="note">深色=落空鏈、淺藍=同一檔被成功命中的鏈。色階按落空率：紅 &gt;80%、橙 50–80%、藍 &lt;50%。CT3267-1 只有 272 個自身錨點，卻被要求 34,055 次逐段對應。</p>
+  <div class="rows" id="bars5"></div>
+  <div class="hint" id="hint5"></div>
+</div>
+
+<p class="foot">重跑方式：<code>node D:\2026\_scratch-ybh\classify2.mjs</code>（分級器，產出四張 CSV）→ <code>node verify.mjs</code>（回原檔逐條驗證 AUTO）→ <code>node slim.mjs</code>（本檔資料負載）。倉庫全程唯讀，未改任何檔案。</p>
+</div>
+<script id="dat" type="application/json">{"series":{"AS-sG":[2,127,99145,2365,393],"AS-sP":[2,961,751142,15630,2605],"ASBhT":[16,986,768770,13890,2315],"Bo-SW":[10,1123,846457,9434,2182],"CT3252":[3,980,584309,4566,823],"CT3258":[3,2550,1406164,6598,823],"CT3263":[3,181,112330,1247,371],"CT3267":[3,213,118905,878,272],"CT3268":[3,161,87195,486,104],"CT3269":[3,185,98279,402,102],"CT3270":[3,506,273378,1126,193],"CT3271":[3,233,128611,827,211],"CT3278":[3,407,259799,3886,556],"CT3282":[3,268,165398,2263,323],"CT3283":[3,428,250652,2494,322],"D4039":[2,31,22867,112,46],"H4037":[2,162,119388,1594,350],"MSA-L":[2,549,412026,2454,818],"PXJ-H":[101,10809,5603786,75219,46769],"README":[1,7,3262,4,0],"Sh-SH":[4,406,307004,2262,770],"Sh-SS":[2,58,45151,520,108],"Sh-ST":[9,316,237157,1644,761],"Sh-TS":[2,73,53686,494,104],"T0099":[51,1699,589072,289,1504],"T1579":[102,7790,3552463,27164,11671],"T1580":[3,39,17035,156,99],"T1581":[12,1030,613643,12359,2287],"T1582":[11,717,424244,8529,1812],"T1583":[2,45,23793,409,107],"T1584":[2,52,26459,392,165],"T1602":[22,751,341411,2877,2610],"T1604":[15,518,259332,2831,822],"T1605":[9,874,635424,15798,2605],"T1606":[18,1155,746758,16371,2605],"T1828":[26,4600,2207511,25652,10795],"T1829":[18,1132,405443,981,381],"T2259":[8,348,134863,12,1000],"T2801":[3,393,132777,54,45],"T2802":[6,137,77339,1040,849],"X0794":[2,4,1230,0,1],"Yo-BA":[2,21,15289,166,55],"Yo-BB":[5,146,109608,846,283],"Yo-BC":[4,353,264793,1780,555],"Yo-TG":[2,4,2903,29,13],"Yo-TJ":[2,26,19646,120,53],"Yo-TK":[2,17,12734,91,35],"samahita_bhumih_skt":[1,110,84968,0,0],"索引":[1,15,8599,358,0]},"tier":{"1":[649,56,21],"2":[2542,137,133],"3":[3651,623,219],"4":[5015,1118,220],"5":[4431,1132,999],"6":[6563,1755,999],"7":[7312,2038,999],"8":[10705,3428,999],"9":[14411,5446,1371],"10":[17555,6494,1867],"11":[21225,8324,2465],"12":[18074,6348,2887],"13":[17984,6075,9999],"14":[16770,6132,9998],"15":[16431,4521,3907],"16":[13183,4129,3710],"17":[10893,3605,3277],"18":[7363,2634,2841],"19":[8996,2996,2674],"20":[6679,1786,2365],"21":[5047,1171,1844],"22":[6323,1371,1569],"23":[3647,643,1333],"24":[3688,504,1011],"25":[3425,419,999],"26":[2980,660,999],"27":[1858,372,999],"28":[1635,276,999],"29":[932,78,999],"30":[1568,145,999],"31":[980,62,997],"32":[1205,225,200],"33":[973,106,169]},"targets":{"CT3267-1":{"tot":34055,"defs":272,"ok":942,"pct":97.3,"bc":{"M1":22020,"S1":2601,"A1":2223,"M2":6610,"S2":544,"M4":57},"src":[["PXJ-H",14382],["T1579",5987],["T1828",3542],["T1581",2280],["Bo-SW",2177],["T1582",1698],["Sh-SH",766],["Sh-ST",760]]},"CT3283-1":{"tot":9149,"defs":322,"ok":2254,"pct":80.2,"bc":{"M1":8323,"S2":269,"A1":357,"M2":200},"src":[["AS-sP",2283],["T1605",2283],["T1606",2283],["ASBhT",1993],["CT3278",234],["AS-sG",72],["CT3282",1]]},"CT3282-1":{"tot":9142,"defs":323,"ok":2260,"pct":80.2,"bc":{"M1":8316,"S2":269,"A1":357,"M2":200},"src":[["AS-sP",2282],["T1605",2282],["T1606",2282],["ASBhT",1992],["CT3278",233],["AS-sG",71]]},"AS-sG-1":{"tot":8723,"defs":393,"ok":2608,"pct":77,"bc":{"M3":7,"M1":7837,"S1":341,"A1":274,"S2":67,"M2":197},"src":[["AS-sP",2212],["T1605",2212],["T1606",2212],["ASBhT",1922],["CT3278",163],["CT3282",1],["CT3283",1]]},"CT3278-1":{"tot":7906,"defs":556,"ok":3263,"pct":70.8,"bc":{"M1":7073,"S2":129,"A1":368,"S1":136,"M2":200},"src":[["AS-sP",2049],["T1605",2049],["T1606",2049],["ASBhT",1759]]},"CT3263-1":{"tot":1808,"defs":371,"ok":1508,"pct":54.5,"bc":{"A1":40,"M3":980,"S2":8,"M1":732,"S1":4,"M2":44},"src":[["CT3252",452],["CT3258",452],["MSA-L",452],["T1604",452]]},"T1584-1":{"tot":1415,"defs":165,"ok":779,"pct":64.5,"bc":{"M1":920,"S2":13,"S1":89,"M4":45,"M3":167,"M5":21,"A1":25,"M2":135},"src":[["PXJ-H",917],["T1579",260],["T1828",226],["T1602",12]]},"Sh-ST-1":{"tot":1333,"defs":69,"ok":258,"pct":83.8,"bc":{"A1":230,"M1":869,"S2":24,"S1":43,"M2":167},"src":[["PXJ-H",749],["T1579",280],["T1828",181],["Sh-SH",44],["Sh-SS",37],["Sh-TS",37],["T1602",5]]},"ASBhT-1":{"tot":870,"defs":247,"ok":1729,"pct":33.5,"bc":{"M1":835,"S1":12,"A1":23},"src":[]},"Yo-BC-1":{"tot":244,"defs":151,"ok":920,"pct":21,"bc":{"M1":107,"A1":5,"M3":131,"S1":1},"src":[]},"T2801-1":{"tot":73,"defs":43,"ok":49,"pct":59.8,"bc":{"M1":73},"src":[]},"Yo-BA-1":{"tot":35,"defs":55,"ok":177,"pct":16.5,"bc":{"M2":9,"M1":26},"src":[]}},"classTotals":{"M1":57155,"S1":3228,"A1":3902,"M2":7768,"S2":1323,"M4":102,"M3":1310,"M5":21},"health":{"ok":173454,"broken":74809},"fam":{"kpDdefs":101673,"app":23838,"fnDefs":7064,"appDefs":23825,"appLinks":20059},"srcBrk":[["PXJ-H",16173],["AS-sP",9116],["T1605",9116],["T1606",9116],["ASBhT",7666],["T1579",6613],["T1828",4033],["T1581",2290],["Bo-SW",2189],["T1582",1709],["Sh-SH",812],["Sh-ST",762],["CT3278",630],["Yo-BC",607]],"label":{"A1":"AUTO 目標檔全檔唯一同名標題","S1":"抽樣 同名標題 2–3 個","S2":"抽樣 僅同 tier 唯一","M1":"人工 超出目標該層最大序號","M2":"人工 目標無此科判層級","M3":"人工 無對齊信號","M4":"人工 佔位哨兵 id","M5":"人工 同名標題過多"},"bucket":{"A1":"AUTO","S1":"抽樣","S2":"抽樣","M1":"人工","M2":"人工","M3":"人工","M4":"人工","M5":"人工"}}</script>
+<script>
+const D = JSON.parse(document.getElementById('dat').textContent);
+const nf = n => Number(n).toLocaleString('en-US');
+const pc = (a, b) => (100 * a / b).toFixed(1) + '%';
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const C = { ok: css('--ok'), warn: css('--warn'), bad: css('--bad'), info: css('--info'), bar: css('--bar'), pri: css('--pri'), cap: css('--cap') };
+const COL = { AUTO: C.ok, '抽樣': C.warn, '人工': C.bad };
+const TOT = D.health.ok + D.health.broken;
+const tip = document.getElementById('tip');
+const show = (e, t) => { tip.innerHTML = t; tip.style.opacity = 1; move(e); };
+const move = e => { tip.style.left = Math.min(e.clientX + 12, innerWidth - 300) + 'px'; tip.style.top = (e.clientY + 12) + 'px'; };
+const hide = () => tip.style.opacity = 0;
+const bsum = b => Object.entries(D.classTotals).filter(([c]) => D.bucket[c] === b).reduce((a, [, n]) => a + n, 0);
+const AUTO = bsum('AUTO'), SAMP = bsum('抽樣'), HUM = bsum('人工');
+
+document.getElementById('cards').innerHTML = [
+  ['kpD 互鏈總數', nf(TOT), '跨卷科判對照鏈（另有 20,059 條校勘鏈零落空）'],
+  ['命中', nf(D.health.ok), pc(D.health.ok, TOT) + ' 錨點在目標檔存在'],
+  ['落空', nf(D.health.broken), pc(D.health.broken, TOT) + ' 目標檔存在、錨點不存在'],
+  ['可自動重導向', nf(AUTO), pc(AUTO, D.health.broken) + '，已逐條回原檔驗證'],
+  ['抽樣後批次', nf(SAMP), '同名標題 2–3 個，或僅同 tier 唯一'],
+  ['需人工', nf(HUM), '其中 ' + pc(D.classTotals.M1, HUM) + ' 是目標科判密度不足'],
+  ['三層標記量', nf(D.fam.kpDdefs) + '<br><span style="font-size:12px">/' + nf(D.fam.appDefs) + ' / ' + nf(D.fam.fnDefs) + '</span>', '科判錨點 / 校勘錨點 / 腳註定義']
+].map(c => '<div class="card"><div class="lb">' + c[0] + '</div><div class="v">' + c[1] + '</div><div class="s">' + c[2] + '</div></div>').join('');
+
+const SER = Object.entries(D.series).map(([k, s]) => ({ k, files: s[0], kb: s[1], chars: s[2], links: s[3], anchors: s[4] }));
+const MET = {
+  chars: { lb: '字量（萬字）', f: s => s.chars / 10000, fmt: v => (v / 10000).toFixed(1) },
+  links: { lb: 'wikilink 數', f: s => s.links, fmt: v => nf(Math.round(v)) },
+  anchors: { lb: '科判錨點數', f: s => s.anchors, fmt: v => nf(Math.round(v)) },
+  kb: { lb: '体积 MB', f: s => s.kb, fmt: v => (v / 1024).toFixed(2) }
+};
+let m1 = 'chars';
+function draw1() {
+  const top = [...SER].sort((a, b) => MET[m1].f(b) - MET[m1].f(a)).slice(0, 16);
+  const mx = MET[m1].f(top[0]);
+  document.getElementById('bars1').innerHTML = top.map(s => {
+    const val = MET[m1].f(s);
+    return '<div class="row" data-k="' + s.k + '"><span class="lbl">' + s.k + '</span>' +
+      '<span class="n"><i style="width:' + (100 * val / mx) + '%;background:' + C.bar + '"></i></span>' +
+      '<span class="k">' + MET[m1].fmt(val) + '</span></div>';
+  }).join('');
+  [...document.querySelectorAll('#bars1 .row')].forEach(r => {
+    const s = SER.find(x => x.k === r.dataset.k);
+    r.onmouseenter = e => show(e, '<b>' + s.k + '</b><br>' + nf(s.chars / 10000).replace(/\.0$/, '') + ' 萬字 · ' + nf(s.links) + ' 鏈<br>' + nf(s.anchors) + ' 科判錨點 · ' + s.files + ' 檔 · ' + (s.kb / 1024).toFixed(2) + ' MB');
+    r.onmousemove = move; r.onmouseleave = hide;
+  });
+}
+document.getElementById('seg1').innerHTML = '<span class="lab">度量</span>' + Object.entries(MET).map(([k, o]) => '<button class="m' + (k === m1 ? ' on' : '') + '" data-m="' + k + '">' + o.lb + '</button>').join('');
+document.getElementById('seg1').onclick = e => { const b = e.target.closest('button'); if (!b) return; m1 = b.dataset.m;
+  [...e.currentTarget.querySelectorAll('button')].forEach(x => x.classList.toggle('on', x === b)); draw1(); };
+draw1();
+
+const TIERS = Object.keys(D.tier).map(Number).sort((a, b) => a - b);
+const M2 = { 0: { lb: '被引用次數', c: C.info }, 1: { lb: '落空次數', c: C.bad }, r: { lb: '落空率 %', c: C.warn } };
+let m2 = '1';
+function draw2() {
+  const arr = TIERS.map(t => m2 === 'r' ? 100 * D.tier[t][1] / D.tier[t][0] : D.tier[t][+m2]);
+  const mx = Math.max(...arr);
+  document.getElementById('bars2').innerHTML = TIERS.map((t, i) =>
+    '<div class="col" data-t="' + t + '"><b>' + (m2 === 'r' ? arr[i].toFixed(0) + '%' : nf(Math.round(arr[i]))) + '</b>' +
+    '<i style="height:' + Math.max(1, 175 * arr[i] / mx) + 'px;background:' + M2[m2].c + '"></i><em>' + t + '</em></div>').join('');
+  [...document.querySelectorAll('#bars2 .col')].forEach(c => {
+    const t = c.dataset.t, o = D.tier[t];
+    c.onmouseenter = e => show(e, '<b>tier ' + t + '</b><br>被引用 ' + nf(o[0]) + ' 次，落空 ' + nf(o[1]) + '（' + pc(o[1], o[0]) + '）<br>被引用到的最大序號 ' + nf(o[2]) + (o[2] >= 999 ? ' ← 哨兵佔位值' : ''));
+    c.onmousemove = move; c.onmouseleave = hide;
+  });
+}
+document.getElementById('seg2').innerHTML = '<span class="lab">度量</span>' + Object.entries(M2).map(([k, o]) => '<button class="m' + (k === m2 ? ' on' : '') + '" data-m="' + k + '">' + o.lb + '</button>').join('');
+document.getElementById('seg2').onclick = e => { const b = e.target.closest('button'); if (!b) return; m2 = b.dataset.m;
+  [...e.currentTarget.querySelectorAll('button')].forEach(x => x.classList.toggle('on', x === b)); draw2(); };
+draw2();
+
+const TK = Object.keys(D.targets).sort((a, b) => D.targets[b].tot - D.targets[a].tot);
+const sel = document.getElementById('sel');
+sel.innerHTML = '<option value="ALL">全部（' + nf(D.health.broken) + ' 條）</option>' +
+  TK.map(t => '<option value="' + t + '">' + t + '（' + nf(D.targets[t].tot) + '）</option>').join('');
+function draw34() {
+  const key = sel.value, src = key === 'ALL' ? D.classTotals : D.targets[key].bc;
+  const ent = Object.entries(src).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]);
+  const tot = ent.reduce((a, [, n]) => a + n, 0);
+  document.getElementById('stack3').innerHTML = ent.map(([c, n]) =>
+    '<i style="width:' + (100 * n / tot) + '%;background:' + COL[D.bucket[c]] + '" title="' + D.label[c] + '"></i>').join('');
+  document.getElementById('lg3').innerHTML = ['AUTO', '抽樣', '人工'].map(b => {
+    const n = ent.filter(([c]) => D.bucket[c] === b).reduce((a, [, x]) => a + x, 0);
+    return '<span><i class="dot" style="background:' + COL[b] + '"></i>' + b + ' ' + nf(n) + ' · ' + pc(n, tot) + '</span>';
+  }).join('') + '<span style="color:' + C.cap + '">合計 ' + nf(tot) + '</span>';
+  document.getElementById('tbl3').innerHTML = '<tr><th>分級</th><th class="num">條數</th><th class="num">佔比</th></tr>' +
+    ent.map(([c, n]) => '<tr><td><i class="dot" style="background:' + COL[D.bucket[c]] + ';margin-right:.35rem"></i>' + D.label[c] +
+      '</td><td class="num">' + nf(n) + '</td><td class="num">' + pc(n, tot) + '</td></tr>').join('');
+  const bs = key === 'ALL' ? D.srcBrk : (D.targets[key].src.length ? D.targets[key].src : D.srcBrk);
+  const mx = bs[0][1];
+  document.getElementById('bars4').innerHTML = bs.map(([k, n]) =>
+    '<div class="row"><span class="lbl">' + k + '</span><span class="n"><i style="width:' + (100 * n / mx) + '%;background:' + C.warn + '"></i></span><span class="k">' + nf(n) + '</span></div>').join('');
+  document.getElementById('hint4').textContent = key === 'ALL'
+    ? '默認按「发出端系列」統計：PXJ-H 发出 16,173 條落空鏈最多。選定目標檔後，此圖切換成「哪些系列鏈進該檔並落空」；長尾目標（src 空）會退回发出端視圖。'
+    : '目標 ' + key + '：' + nf(D.targets[key].tot) + ' 條落空 / 自身 ' + nf(D.targets[key].defs) + ' 個科判錨點 / 被成功命中 ' + nf(D.targets[key].ok) + ' 條（落空率 ' + D.targets[key].pct + '%）。';
+}
+sel.onchange = draw34; draw34();
+
+function draw5() {
+  const mx = Math.max(...TK.map(t => D.targets[t].tot + D.targets[t].ok));
+  document.getElementById('bars5').innerHTML = TK.map(t => {
+    const o = D.targets[t], col = o.pct > 80 ? C.bad : o.pct > 50 ? C.warn : C.info;
+    return '<div class="row clk" data-t="' + t + '"><span class="lbl">' + t + '</span>' +
+      '<span class="n"><i style="width:' + (100 * o.tot / mx) + '%;background:' + col + '"></i>' +
+      '<i style="width:' + (100 * o.ok / mx) + '%;background:' + C.info + '44"></i></span>' +
+      '<span class="k">' + nf(o.tot) + ' · ' + o.pct + '%</span></div>';
+  }).join('');
+  [...document.querySelectorAll('#bars5 .row')].forEach(r => {
+    const t = r.dataset.t, o = D.targets[t];
+    r.onclick = () => { sel.value = t; draw34(); sel.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
+    r.onmouseenter = e => show(e, '<b>' + t + '</b><br>落空 ' + nf(o.tot) + ' / 命中 ' + nf(o.ok) + '<br>自身科判錨點 ' + nf(o.defs) + '，落空率 ' + o.pct + '%<br>可自動修 ' + nf(o.bc.A1 || 0) + '，需人工 ' + nf((o.bc.M1 || 0) + (o.bc.M2 || 0) + (o.bc.M3 || 0) + (o.bc.M4 || 0) + (o.bc.M5 || 0)) + '<br>_click → 同步篩選第三節_');
+    r.onmousemove = move; r.onmouseleave = hide;
+  });
+  const three = D.targets['CT3267-1'].tot + D.targets['CT3282-1'].tot + D.targets['CT3283-1'].tot;
+  document.getElementById('hint5').textContent = '前三大目標合吃 ' + pc(three, D.health.broken) + ' 的全庫落空鏈；這 12 檔涵蓋 ' +
+    pc(TK.reduce((a, t) => a + D.targets[t].tot, 0), D.health.broken) + '，其餘 12 檔各少於 11 條。所以「修鏈」的決策實質上是對 CT3267／CT3282／CT3283／AS-sG／CT3278 這幾個中華藏系的科判密度做取捨。';
+}
+draw5();
+</script>
+</body>
+</html>
