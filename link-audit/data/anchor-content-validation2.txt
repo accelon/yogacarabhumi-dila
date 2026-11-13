@@ -1,0 +1,39 @@
+=== 內容級驗證（修正版：剝校勘符號 + 只比同本同role同語言）===
+  安全元件 9,124
+  無正文/過短 3,530；有正文但無「同本同語言」配對 4,429；**可比 1,165**
+
+  可比元件中：逐字相同 9 (0.8%)
+              Dice>=0.90 13 (1.1%)
+              0.50–0.90 86 (7.4%)
+              <0.50     1,057 (90.7%)
+  配對相似度 p10 0.047 中位 0.176 p90 0.550（1,284 對）
+
+=== 按「著作|role|語言」分組 ===
+  group                       pairs  meanDice  exact   low
+  菩薩地漢譯|root|zh                 543     0.184      0   514
+  瑜伽論釋|comm|zh                  267     0.228      2   238
+  瑜伽論|root|sa                   188     0.249      0   180
+  莊嚴釋|comm|bo                   184     0.168      0   179
+  集論釋|comm|bo                    46     0.639      0     9
+  集論|root|sa                     44     0.861     19     6
+  莊嚴頌|root|sa                    10     0.089      0    10
+  莊嚴釋|comm|mix                    1     0.935      0     0
+  莊嚴頌|root|zh                     1     1.000      1     0
+
+  --- 仍低相似例 ---
+    集論|root|sa 平均 0.427
+      AS-sG-1#kpD12-010 「L1 第一位第一種（約所依別」 (fol. a)jihvākāyamanaḥsaṃsparśajā saṃjñā /
+      AS-sP-1#kpD12-010 「L1 第一位第一種（約所依別」 saṃjñāskandhavyavasthānaṃ katamat / ṣaṭ saṃj
+    集論|root|sa 平均 0.396
+      AS-sG-1#kpD12-011 「L2 第二位第二三種（約作意別」 yathā sanimittam api saṃjānāti, animittam ap
+      AS-sP-1#kpD12-011 「L2 第二位第二三種（約作意別」 yathā sanimittam api saṃjānāti  animittam ap
+      CT3278-1#kpD12-011 「L2 第二位第二三種（約作意別」 གང་གིས་མཚན་མ་དང་བཅས་པ་ཡང་དག་པར་ཤེས་ཤིང༌། མཚན
+    集論|root|sa 平均 0.558
+      AS-sG-1#kpD13-007 「M1 列五十三心所別名」 te punaḥ katame / manaskāraḥ sparśaḥ chando 
+      AS-sP-1#kpD13-007 「M1 列五十三心所別名」 te punaḥ katame / manaskāraḥ sparśaḥ cchando
+    集論|root|sa 平均 0.691
+      AS-sG-1#kpD17-002 「Q2 邊執見」 antagrāhadṛṣṭiḥ katamā / pañcopādānaskandhān
+      AS-sP-1#kpD17-002 「Q2 邊執見」 antagrāhadṛṣṭiḥ katamā / pañcopādānaskandhān
+    集論|root|sa 平均 0.715
+      AS-sG-1#kpD17-004 「Q4 戒禁取」 śīlavrataparāmarśaḥ katamaḥ / śīlaṃ vrataṃ ś
+      AS-sP-1#kpD17-004 「Q4 戒禁取」 śīlavrataparāmarśaḥ katamaḥ / śīlaṃ vrataṃ ś

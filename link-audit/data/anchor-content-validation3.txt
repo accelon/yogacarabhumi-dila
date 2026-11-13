@@ -1,0 +1,35 @@
+=== 內容級驗證 v3（語言依權威表判定 + 只取該語言字元 + 同本同role）===
+  安全元件 9,124
+  無正文/過短 3,588；有正文但無「同本同語言」配對 4,466；**可比 1,070**
+
+  可比元件中：逐字相同 10 (0.9%)
+              Dice>=0.90 16 (1.5%)
+              0.50–0.90 89 (8.3%)
+              <0.50     955 (89.3%)
+  配對相似度 p10 0.042 中位 0.148 p90 0.609（1,135 對）
+
+=== 按「著作|role|語言」分組 ===
+  group                       pairs  meanDice  exact   low
+  菩薩地漢譯|root|zh                 539     0.183      0   511
+  瑜伽論釋|comm|zh                  264     0.229      2   235
+  莊嚴釋|comm|bo                   238     0.137      0   232
+  集論釋|comm|bo                    46     0.666      0     9
+  集論|root|sa                     39     0.961     19     1
+  瑜伽論|root|sa                     9     0.824      0     1
+
+  --- 仍低相似例 ---
+    集論|root|sa 平均 0.427
+      AS-sG-1#kpD12-010 [sa] 「L1 第一位第一種（約所依別」 folajihvkyamanasasparajsaj
+      AS-sP-1#kpD12-010 [sa] 「L1 第一位第一種（約所依別」 sajskandhavyavasthnakatamatasajkycakusaspara
+    集論|root|sa 平均 0.567
+      AS-sG-1#kpD13-007 [sa] 「M1 列五十三心所別名」 tepunakatamemanaskrasparachandodhimokasmtisa
+      AS-sP-1#kpD13-007 [sa] 「M1 列五十三心所別名」 tepunakatamemanaskrasparacchandodhimokasmtis
+    集論|root|sa 平均 0.699
+      AS-sG-1#kpD17-002 [sa] 「Q2 邊執見」 antagrhadikatampacopdnaskandhnvatovucchedato
+      AS-sP-1#kpD17-002 [sa] 「Q2 邊執見」 antagrhadikatampacopdnaskandhnvatovucchedato
+    集論|root|sa 平均 0.715
+      AS-sG-1#kpD17-004 [sa] 「Q4 戒禁取」 lavrataparmarakatamalavratalavratcapacopdnas
+      AS-sP-1#kpD17-004 [sa] 「Q4 戒禁取」 lavrataparmarakatamalavratalavratcapacopdnas
+    集論|root|sa 平均 0.619
+      AS-sG-1#kpD14-010 [sa] 「N1 標列二十三種不相應名」 prptirasajisampattirnirodhasampattirsajikajv
+      AS-sP-1#kpD14-010 [sa] 「N1 標列二十三種不相應名」 prptirasajisampattirnirodhasampattirsajikajv
