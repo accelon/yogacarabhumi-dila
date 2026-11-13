@@ -338,10 +338,11 @@ function bodyLines(text: string, fam: string, childChain: string, base: string):
 const KE_TIERS = Array.from({ length: 54 }, (_, i) => '科' + String(i + 1).padStart(2, '0')).join(',');
 const lines: string[] = [];
 lines.push(`<集 t="集">${esc('瑜伽師地論漢文集成')}</集>`);
-// v5：每套科判一棵樹、一個頁籤（作者 2026-11-13）。主樹 t=（篇,章,科01…科54＝56 層）是
-// 全庫唯一最長鏈——nodeAnchorIndex 的命名空間（首標籤 篇）與卷級別名（第二層 章）都從它解析；
-// 16 個家族樹各 ≤54 層，嚴格短於主樹，不會搶走 nsTag。
-lines.push(`<隱><樹 s="*" l="註,釋" t="篇,章,${KE_TIERS}.">總目錄·瑜伽師地論科</樹></隱>`);
+// v5：每套科判一棵樹、一個頁籤（作者 2026-11-13）。v15 再拆：第一棵＝純書目（篇,章），
+// 本論科判獨立一棵；主幹鏈（篇,章,科01…54＝56 層）仍是全庫最長——nsTag=篇／volTag=章
+// 的錨定不動。待 accelon26 落实 loadTree 封閉詞彙後，「總目錄」頁籤即只剩 17 書＋360 卷。
+lines.push(`<隱><樹 s="*" l="註,釋" t="篇,章.">總目錄</樹></隱>`);
+lines.push(`<隱><樹 s="*" t="篇,章,${KE_TIERS}.">瑜伽師地論科判</樹></隱>`);
 for (const [ser, name] of WORKS) {
   const fam = FAM[ser];
   if (!fam) continue;                       // T1579 已在主樹
