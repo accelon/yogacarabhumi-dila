@@ -85,7 +85,7 @@ function resolveWin(i: number): { sp: { page: string; js: number; je: number; mo
 // ---- 本書（SER）科判 ----
 const files = fs.readdirSync(VAULT).filter((f) => new RegExp(`^${SER.replace(/-/g, '\\-')}-\\d+\\.md$`).test(f))
   .sort((a, b) => +/-(\d+)\.md$/.exec(a)![1]! - +/-(\d+)\.md$/.exec(b)![1]!);
-const my: { base: string; line: number; kp: string; title: string; nt: string; d: number; dw?: { page: string; js: number; je: number; mode: string }; dl?: string }[] = [];
+const my: { base: string; line: number; kp: string; title: string; nt: string; d: number; dw?: { page: string; js: number; je: number; mode: string }; dl?: string; nk?: string }[] = [];
 let dGateN = 0;                    // 合理性閘擋下的現掛鏈數
 const DLINK = /^《\[\[(T1579-\d+|PXJ-H-\d+)#\^(kpD\d+-\d+)(?:[^\]]*)\]\]》\s*$/;
 for (const f of files) {
@@ -109,7 +109,7 @@ for (const f of files) {
       const w = anyWin.get(`${dm[1]}#${dm[2]}`);
       if (!w) continue;
       if (!plausible(dm[1]!, w.page)) { dGateN++; continue; }
-      if (dm[1]!.startsWith('T1579')) { rec.dw = w; rec.dl = x.replace(/^《\[\[|\]\]》$/g, ''); break; }
+      if (dm[1]!.startsWith('T1579')) { rec.dw = w; rec.dl = x.replace(/^《\[\[|\]\]》$/g, ''); rec.nk = dm[1] + '#' + dm[2]; break; }
       if (!apw) { apw = w; apl = x.replace(/^《\[\[|\]\]》$/g, ''); }
     }
     if (!rec.dw && apw) { rec.dw = apw; rec.dl = apl; }
@@ -164,32 +164,35 @@ const rankOf = (p: string) => +(/30p(\d+)/.exec(p)?.[1] ?? NaN) * 10 + 'abc'.ind
 const ownWin = my.map((r, i) => {
   const mm = matched.get(i);
   const rw = mm ? resolveWin(mm.at) : null;
+  // 融合目標節點錨（P4 <融 i="ybh?…">）：T1579 直掛鏈優先，其次取對齊到的 T1579 節點
+  const nkOf = (): string => r.nk ?? (mm ? `${Hs[mm.at]!.base}#${Hs[mm.at]!.kp}` : '');
+  const dlOf = (): string => (r.dl && r.dl.includes('|') ? r.dl.split('|').pop()! : (r.dl ?? ''));
   if (r.dw) {                                            // 第一手：DILA 自己標的對應
     if (rw) { if (rw.sp.page === r.dw.page && rw.sp.js === r.dw.js) agreeN++; else disagreeN++; }
     // AP（經披尋記轉掛）若與直接對齊差 >2 欄，改用直接對齊——轉掛多一層，平行文句風險高
     if (rw && r.dl!.startsWith('PXJ-H') && Math.abs(rankOf(r.dw.page) - rankOf(rw.sp.page)) > 2) {
       apOverrideN++;
-      return { page: rw.sp.page, js: rw.sp.js, je: rw.sp.je, mode: mm!.kind + rw.src, note: `AP 距對齊窗 >2 欄，改採 ${mm!.kind}`, h: Hs[mm!.at], src: Hs[rw.at] };
+      return { page: rw.sp.page, js: rw.sp.js, je: rw.sp.je, mode: mm!.kind + rw.src, note: `AP 距對齊窗 >2 欄，改採 ${mm!.kind}`, h: Hs[mm!.at], src: Hs[rw.at], nk: nkOf() };
     }
-    return { page: r.dw.page, js: r.dw.js, je: r.dw.je, mode: 'A' + (r.dl!.startsWith('T1579') ? 'T' : 'P'), note: `書內現掛 ${r.dl}`, h: mm ? Hs[mm.at] : undefined, src: rw ? Hs[rw.at] : undefined, dlLabel: r.dl!.includes('|') ? r.dl!.split('|').pop()! : r.dl! };
+    return { page: r.dw.page, js: r.dw.js, je: r.dw.je, mode: 'A' + (r.dl!.startsWith('T1579') ? 'T' : 'P'), note: `書內現掛 ${r.dl}`, h: mm ? Hs[mm.at] : undefined, src: rw ? Hs[rw.at] : undefined, nk: nkOf(), dlLabel: dlOf() };
   }
-  if (!mm) return { page: '', js: -1, je: -1, mode: 'no', note: '未對齊', h: undefined as H | undefined, src: undefined as H | undefined };
-  if (!rw) return { page: '', js: -1, je: -1, mode: mm.kind + '?', note: '命中但子樹無窗', h: Hs[mm.at], src: undefined };
-  return { page: rw.sp.page, js: rw.sp.js, je: rw.sp.je, mode: mm.kind + rw.src, note: '', h: Hs[mm.at], src: Hs[rw.at] };
+  if (!mm) return { page: '', js: -1, je: -1, mode: 'no', note: '未對齊', h: undefined as H | undefined, src: undefined as H | undefined, nk: '' };
+  if (!rw) return { page: '', js: -1, je: -1, mode: mm.kind + '?', note: '命中但子樹無窗', h: Hs[mm.at], src: undefined, nk: nkOf() };
+  return { page: rw.sp.page, js: rw.sp.js, je: rw.sp.je, mode: mm.kind + rw.src, note: '', h: Hs[mm.at], src: Hs[rw.at], nk: nkOf() };
 });
 const stack: number[] = [];
-const out: { base: string; kp: string; page: string; js: number; je: number; mode: string; title: string; srcTitle: string }[] = [];
+const out: { base: string; kp: string; page: string; js: number; je: number; mode: string; title: string; srcTitle: string; nodeKey: string }[] = [];
 const audit: string[] = ['zhu_line\tzhu_kp\tzhu_title\tmode\t1579卷\t1579_kp\t1579標題\t窗源行\t1579窗標題\tpage\tjs\tje\t說明'];
 const tally: Record<string, number> = {};
 my.forEach((r, i) => {
   while (stack.length && my[stack[stack.length - 1]!]!.d >= r.d) stack.pop();
-  let rec = { base: r.base, kp: r.kp, page: ownWin[i]!.page, js: ownWin[i]!.js, je: ownWin[i]!.je, mode: ownWin[i]!.mode, title: r.title.trim(), srcTitle: ownWin[i]!.src?.raw?.trim() ?? (ownWin[i] as any).dlLabel ?? '' };
+  let rec = { base: r.base, kp: r.kp, page: ownWin[i]!.page, js: ownWin[i]!.js, je: ownWin[i]!.je, mode: ownWin[i]!.mode, title: r.title.trim(), srcTitle: ownWin[i]!.src?.raw?.trim() ?? (ownWin[i] as any).dlLabel ?? '', nodeKey: (ownWin[i] as any).nk ?? '' };
   let note = ownWin[i]!.note;
   if (rec.js < 0) {
     for (let k = stack.length - 1; k >= 0; k--) {
       const a = ownWin[stack[k]!]!;
       if (a.js >= 0) {
-        rec = { base: r.base, kp: r.kp, page: a.page, js: a.js, je: a.je, mode: 'K', title: r.title.trim(), srcTitle: a.src?.raw?.trim() ?? (a as any).dlLabel ?? '' };
+        rec = { base: r.base, kp: r.kp, page: a.page, js: a.js, je: a.je, mode: 'K', title: r.title.trim(), srcTitle: a.src?.raw?.trim() ?? (a as any).dlLabel ?? '', nodeKey: (a as any).nk ?? '' };
         note = `祖先 L${my[stack[k]!]!.line}「${my[stack[k]!]!.title.trim()}」`;
         break;
       }

@@ -85,6 +85,7 @@ if (!FAST) {
     ['④ 段落 ref（adb 位元組回讀＋renderEmbed）', ['verify-zhu-refs.ts', YBH], /PASS/],
     ['⑤a 樹回歸（總目錄 17 根／377 節／卷級錨落點）', ['verify-v15.ts'], /根=17（期望17）總節點=377（期望377）/],
     ['⑤b 樹回歸（35 頁籤・科大漢父層）', ['probe-outline-tabs.ts'], /樹總數 35[\s\S]*子女=2/],
+    ['⑥ 融視圖（<融> 枚數、成對性、抽樣填入＝headless V6）', ['verify-fusion-ybh.ts', YBH], /PASS/],
   ] as [string, string[], RegExp][]) {
     const t0 = Date.now();
     let out = '', crashed = false;

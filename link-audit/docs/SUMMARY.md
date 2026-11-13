@@ -855,3 +855,25 @@ R4 前提經產品碼路實證（`probe-charpos.ts`：`anchorVa('30p279a#40-44')
 入庫變化：注文段落 ref 9,900 → **10,162**、CBETA 聯 49,449 → **49,711**、跨庫頁欄 29,034 → **29,311** 種。**verify-all v22 全綠**：②94,632/0 FAIL、③29,311/0 FAIL、④10,162/10,162 缺發 0、真錯位 0、窗尾截短 **10→9**、Q/Q2 窗首 **3,681/3,681**、⑤a/⑤b 綠 → **PASS**（`data/verify-v22.txt`）。v21 舊檔備份 `out/ybh.adb.v21.bak`。
 
 **新增一坑記帳**：分批跑留下的備份檔 `zhu-refs-*.pre-refine.tsv` 會被 `/^zhu-refs-.+\.tsv$/` 匹配，重試趟差點把備份當正本再掃一遍（第一次煙測確實列出它）；已加排除 `pre-refine` 與 `shipped`。並行分批時各寫自己的 `--audit=` 檔名，避免互相覆寫。
+
+### 16.27 v23：P4 融視圖資料端落地——12,851 枚 `<融>` 指向同一份論本（2026-11-14，正式名 sha `a6fc12c7…`，46.92 MiB）
+
+母區 `6e34bca`「融視圖 V6–V10 落地（R1，OFF 預設）」把最後一道牆拆了，本節是 ybh 側的接應。
+
+**發了什麼**：科文／注文的科判行下，另發一枚 `<融 i="ybh?T1579-1#kpD03-001" n="論文・問答標列十七地名" max="24"></融>`——共 **12,851 枚**，全部指向 ybh 自己的 T1579 論本節點（卷級錨）。開關開啟時 `fusion-view.ts` 就地取該節點**子樹 span** 填入，論本文字不被複製（standoff）；同一目標可被多套科判樹引用（V5 已證同 VA），所以「換一套科判看同一份原文」這件使用者的原始訴求，現在是資料形態本身支持的，不需複製檔案。**只發細對齊者**（mode 非 `K`/`no`）：祖先繼承的粗窗若也發，融合视图会出现同一論本片段整片重複。`nodeKey` 由 `span-build-zhu.ts` 隨對齊結果一併產出（T1579 直掛鏈優先，其次取對齊到的 T1579 節點）。
+
+**形態是實測選定的，不是推的**（`tools/test-fusion-form.ts`，直接呼叫母區渲染器）：
+
+| 寫法 | OFF（預設） | ON |
+|---|---|---|
+| `<融 i="…"></融>` 空成對 | 渲染器 `continue`，**零輸出零視覺負擔** | `<span class="fusionBlock" data-i data-n data-max></span>` 配對正確 |
+| `<融 i="…">佔位</融>` | 佔位文字出現在正文（10k 行＝噪音） | 殼內留佔位＝回退 |
+| `<融 i="…"/>` 自閉合 | 正常 | **輸出未閉合的 `<span>`**，會吞掉後續文字 → 禁用 |
+
+`max` 的單位是「**行**」不是字元：實測 `max=200` 對 `T1579-13#kpD02-007` 會拉出 **17,029 字**，`T1579-1#kpD04-006` 8,568 字——照規格書預設發就會把閱讀區塞爆。抽樣 305 條目標測得 `max=24` 時填字分佈 100–1,200、中位數約 400，故定 `max="24"`，並用已落地的 **R6「繼續展開」**當逃生口。
+
+**開關邏輯逐項讀過碼**（`fusion-view.ts` 103 行＋`render_accelon3.ts` @859）：flag 是 `localStorage['accelon26.fusionView']==='1'`（渲染器直接讀同一 key、不 import，避開 import 循環）；`hasFusionTag()` 看 tags 容器名稱有沒有 `融`/`_融`——**這就是我們必須真的把 `融` 寫進標籤表的原因**（實測 `標籤表含融 = true`，否則開關根本不渲染、變成死 UI）；填入走 `readerFor(db) → nodeAnchorInfo → nodeSubtreeEnd → nodeSpanText → embedNodeBody`（與 `<嵌 sub>` 同一 body，故科判縮排／註／節聯 原生存活＝V9）；護欄①「覆寫不得短於佔位」對我們的空佔位恒過；缺目標／庫未開 → 保留原文＋狀態欄 warn（V7）；`IntersectionObserver`＋`BATCH=50` 逐輪延遲取段（V10）。
+
+**要提醒的現況**：`D:\accelon3\accelon26.exe` 是 11-13 13:03 的舊版，檔內 `fusionWrap`/`fusionBlock`/`initFusion` 命中數 **全為 0**（同檔搜 `xrefHit` 得 5 次，證明不是搜法問題）；而 11-14 00:41 的 `accelon26.html` 全都有（fusionWrap×3、fusionBlock×4、initFusion×4、IntersectionObserver×4）。exe 內嵌的是編譯時的 `wails/assets/index.html`（也是 13:03），**所以融視圖現在只能用 HTML 版看，exe 要母區重跑 `build-viewer` ＋ `go build` 才會出現開關**。
+
+**驗收**：`verify-all.ts` 新增第 ⑥ 節（`verify-fusion-ybh.ts`：標籤表、枚數、成對性、抽樣 250 枚 headless 填入＝V6 的資料端等價），並把 `<融 i="ybh?…">` 目標納入 anchor-check。v23 部署檔六節全綠 **PASS**：②94,632/0 FAIL、③29,310/0 FAIL、④段落 ref 10,162/10,162、⑤樹 35 頁籤／17 根 377 節、⑥12,851 枚 0 自閉合、抽樣 250/250 可填。檔 46.92 MiB（v22 45.36→+1.56），v22 備份 `out/ybh.adb.v22.bak`。期間母區又修了缺陷 3（`678ece1`：嵌卡卡頭書名改用「該 VA 所屬《書》區塊」）。

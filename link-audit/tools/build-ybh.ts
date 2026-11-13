@@ -198,6 +198,27 @@ const zhuSpans = new Map<string, { page: string; js: string; je: string; mode: s
   }
 }
 
+// P4 融視圖（v23）：科文／注文的科判行另發一枚 `<融 i="ybh?T1579-N#kpD…">`，
+// 讓「以科文融合顯示」開關（母區 6e34bca／localStorage accelon26.fusionView）把**同一份論本**
+// 就地填入——讀任何一套科判都能看到論文本體，論本文字不被複製（standoff）。
+// 形態經 test-fusion-form.ts 實測定案：① **必須成對** `<融 …></融>`（自閉合會讓渲染器輸出未閉合 <span>）；
+// ② 內容留空＝OFF 時零視覺負擔（渲染器直接 continue），ON 時由 fusion-view 填 span；
+// ③ `max` 是「行」預算而非字元（實測 max=200 可拉到 1.7 萬字），定 max=24 → 填字分佈 100–1,200、
+//    中位數約 400，配合已落地的 R6「繼續展開」當逃生口。
+// 只發細對齊者（mode 非 K/no）：祖先繼承的粗窗融合出來會整片重複。
+const fusions = new Map<string, { nodeKey: string; label: string }>();
+{
+  const dir = 'D:/2026/_scratch-ybh';
+  for (const f of fs.readdirSync(dir).filter((x) => /^zhu-spans-.+\.json$/.test(x)).sort()) {
+    for (const r of JSON.parse(fs.readFileSync(`${dir}/${f}`, 'utf8')) as { base: string; kp: string; mode: string; nodeKey?: string; title?: string }[]) {
+      if (!r.nodeKey || r.mode === 'K' || r.mode === 'no') continue;
+      if (r.nodeKey === `${r.base}#${r.kp}`) continue;              // 指向自己不發
+      fusions.set(`${r.base}#${r.kp}`, { nodeKey: r.nodeKey, label: r.title ?? '' });
+    }
+  }
+}
+let fusionCnt = 0;
+
 // 展示端去重：同卷內「同一窗連著發」只留第一次（科判繼承會讓整部書數百段共用同一大綱窗，
 // 如《手記》429 段全落在 30p395c#56-304）；資料表 zhu-refs-*.tsv 仍保留逐段真相，只在建庫時收攏。
 const lastRef = new Map<string, string>();
@@ -411,6 +432,14 @@ function bodyLines(text: string, fam: string, childChain: string, base: string, 
       out.push(anchor ? `<${tag}${selfT} n="${encodeXmlAttr(anchor)}"${aAttr}>${body}</${tag}>` : `<${tag}${selfT}>${body}</${tag}>`);
       // v15.2：CBETA 聯/嵌移獨立行——併在標題行會被目錄 label 抽取連文字吞進標題（「甲三、攝釋分CBETA」）
       if (sp) out.push(tail.trim());
+      // P4：<融> 也走獨立行、**成對且留空**（形態經 test-fusion-form.ts 實證）
+      if (anchor) {
+        const fu = fusions.get(`${base}#${anchor}`);
+        if (fu) {
+          out.push(`<融 i="ybh?${encodeXmlAttr(fu.nodeKey)}" n="論文・${encodeXmlAttr(fu.label)}" max="24"></融>`);
+          fusionCnt++;
+        }
+      }
       continue;
     }
     // 校勘附編（-a）定義行：行尾 ` ^appID` → 行首 <錨 n/>，讓校注引用有落點（v7）
@@ -517,7 +546,7 @@ const out = path.join(OUTDIR, 'ybh.adb');
 fs.writeFileSync(out, res.file);
 console.log(`built ${out}: ${(res.file.length / 1048576).toFixed(2)} MiB in ${Date.now() - t0} ms — ${res.lines} lines, ${res.tokens} tokens, tags: ${res.tagNames.join(' ')}`);
 console.log('cachedKeys:', res.cachedKeys.join(' '));
-console.log(`互鏈：節聯 ${jieCnt}、CBETA 聯 ${taishoCnt}（科判行 ${taishoCnt - paraRefCnt}＝v19 新增他家族 ${kepanZhuCnt}＋注文段落 ref ${paraRefCnt}，另收攏同窗重複 ${paraDupCnt}）、CBETA 行內嵌 ${embedJCnt}、自指鏈行併除 ${selfMergeCnt}、梵漢剝除 ${delRefCnt}、文字 ${textCnt}、<錨> ${anchorCnt}、干支改名 ${renameCnt}`);
+console.log(`互鏈：節聯 ${jieCnt}、CBETA 聯 ${taishoCnt}（科判行 ${taishoCnt - paraRefCnt}＝v19 新增他家族 ${kepanZhuCnt}＋注文段落 ref ${paraRefCnt}，另收攏同窗重複 ${paraDupCnt}）、CBETA 行內嵌 ${embedJCnt}、**P4 <融> ${fusionCnt} 枚**、自指鏈行併除 ${selfMergeCnt}、梵漢剝除 ${delRefCnt}、文字 ${textCnt}、<錨> ${anchorCnt}、干支改名 ${renameCnt}`);
 
 // ---- 產後驗收（驗收腳本本身也要被驗）：錨點逐條解析＋節點行核對＋已知負控 ----
 {
@@ -540,8 +569,8 @@ console.log(`互鏈：節聯 ${jieCnt}、CBETA 聯 ${taishoCnt}（科判行 ${ta
 
   // anchor-check.tsv：每個 節聯/嵌 目標 (1) 解析出 VA (2) 該 VA 的行含 n="值"（科 或 錨 通用）
   const counts = new Map<string, number>();
-  for (const m of lines.join('\n').matchAll(/<節聯 n="([^"]+)"|<嵌 i="ybh\?([^"]+)"/g)) {
-    const k = m[1] ?? m[2]!;
+  for (const m of lines.join('\n').matchAll(/<節聯 n="([^"]+)"|<嵌 i="ybh\?([^"]+)"|<融 i="ybh\?([^"]+)"/g)) {
+    const k = m[1] ?? m[2] ?? m[3]!;                              // 節聯 n=／嵌 i=ybh?／**融 i=ybh?（P4 目標也要逐條解析）**
     counts.set(k, (counts.get(k) ?? 0) + 1);
   }
   const rows: string[] = ['anchor\thits\tva\tline\theadcheck\tstatus'];
