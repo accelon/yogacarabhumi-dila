@@ -704,3 +704,13 @@ adb-converter 交付通用節點錨點（`page-text.ts nodeAnchorInfo/nodeSpanTe
 ### 16.13 v14：CBETA 聯升級頁欄#a-b（精確字位）（2026-11-13，正式名 D:\accelon3\ybh.adb）
 
 R4 前提經產品碼路實證（`probe-charpos.ts`：`anchorVa('30p279a#40-44')` 正確剝尾綴回頁 VA、`parseCharPosition` 拆解無誤），accelon26 處置單亦確認跨庫右欄依 `mark.xrefHit` 捲動高亮——v14 把 24,428 條有 j 窗的 CBETA 聯升級 `i="taisho?頁欄#a-b"`（插值/無窗者留純頁欄），點「CBETA」直接落在該科原文字位並高亮，不再只落頁首。驗收：跨庫 24,585 種形式 0 FAIL、anchor-check 94,632 0 FAIL、成品 42.66 MiB。頂齊（block:'start'）待 accelon26 一行改，改後**無需重建**——資料已含字位。
+
+### 16.14 v14.1：j 窗全數實窗驗證與剝窗降級（2026-11-13，正式名 sha adbf4c90…）
+
+使用者要求「24,428 條全數驗證」——由抽樣升級為**逐條經 renderEmbed 實窗比對**（產品碼路），過程挖出並修掉三層問題：
+
+- **45 條 jend 越頁長**：span-index 掃描頁長與 `pageHanTextOf` 不一致所致。
+- **根因挖到底**：`pageHanTextOf` 以 `va - bv[blk]` 當 block 內偏移，但 `<頁>` 是 SKIP 標籤（VA≠PA），skip 密度高的頁起點前移、回傳窗口根本不是該欄內容（實證 30p434c：傳回 201 字且尾句屬別欄）——**這是 accelon26 側的潛在 bug**，本輪不改母區，列單待報。
+- **對策（資料端自癒）**：j 座標系改以 `pageHanTextOf` 產出**為定義**（span-index v3）；`span-filter.ts` 再逐條用 `renderEmbed` 開窗實測，窗首不符者**剝窗降級為純頁欄聯**（跳頁功能保留、只是不精確定點）。短窗（內容對、窗較 key 短）160 條判可接受保留。
+- **終局數字**：CBETA 聯 35,025 條＝**26,066 條精確窗（100% 實窗驗證通過）＋ 8,959 條純頁欄**；行內嵌 26,066；anchor-check 94,632 0 FAIL；跨庫 25,855 種形式 0 FAIL。
+- 教訓記帳：抽樣 25/25 曾給假綠燈——**「全數通過」必須逐條開窗對照**，且驗收座標系必須與消費端同一函數定義（同碼路原則的座標系版本）。

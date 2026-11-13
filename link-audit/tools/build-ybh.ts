@@ -108,7 +108,7 @@ for (const [ser] of WORKS) CHAIN[ser] = famChain(ser);
 // P1/P1b span 表：T1579 與披尋記科判 → CBETA 頁欄＋行內 j（span-index.ts 產出）
 const spans = new Map<string, { page: string; js: string; je: string; mode: string }>();
 {
-  const sp = 'D:/2026/_scratch-ybh/spans-j.tsv';
+  const sp = 'D:/2026/_scratch-ybh/spans-j-verified.tsv';
   if (fs.existsSync(sp)) {
     for (const r of fs.readFileSync(sp, 'utf8').split('\n').slice(1)) {
       const c = r.split('\t');
