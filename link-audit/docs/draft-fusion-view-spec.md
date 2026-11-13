@@ -38,6 +38,8 @@
 | `link-audit/tools/make-fusion-fixture.ts` | 重建腳本（無時間戳） |
 | `link-audit/tools/verify-fusion-fixture.ts` | 10 條斷言執行器 |
 
+**治理（使用者 2026-11-13 定案）**：fusion fixture 由 **ybh 倉持續管理**，不拷貝進 accelon26；accelon26 側一律絕對路徑引用。**full rebuild 驗收必跑** `verify-fusion-fixture.ts`：5 條基礎斷言（V1–V5）不得減少、GATE 隨視圖實裝逐條轉綠（目標 10/10）。
+
 ## 5. 開放問題（要你們拍板，再回報使用者）
 
 1. 視圖開關位置：目錄面板 checkbox vs 全局工具列？（建議前者，因作用域是「這一庫以哪棵樹看」）
