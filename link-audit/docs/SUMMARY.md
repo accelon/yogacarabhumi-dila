@@ -811,3 +811,9 @@ R4 前提經產品碼路實證（`probe-charpos.ts`：`anchorVa('30p279a#40-44')
 **驗收**：anchor-check 94,632/0 FAIL；跨庫 taisho 頁欄 25,915 種 0 FAIL；`verify-zhu-refs.ts`（整庫串接掃描＋產品同碼路逐條取窗）：缺發 0、多發 0、真錯位 0、窗尾截短 10（起點正確、尾差 1-2 字，屬消費端 pageHanTextOf VA/PA 家族，隨 R 清單一併回報）、Q 窗首 67/67。v17 舊檔備份 `out/ybh.adb.v17.bak`（`a2db582a…`）。
 
 **產物**：`tools/span-build-zhu.ts`（D 現掛→LIS-LCS→缺口→同子樹取窗→祖先繼承，含 D-vs-LCS 互證計數）、`tools/span-zhu.ts`（A/O/K/Q 四層合併＋收攏前真相表）、`tools/verify-zhu-refs.ts`（整庫串接回讀驗收）、`tools/zhu-inventory.ts`／`probe-dlayer.ts`／`spot-zhu.ts`／`zhu-stats.ts`（盤點與抽檢）、`data/zhu-{spans,refs}-*.tsv/json/csv`（七部全套＋Excel 版）、`data/zhu-refs-shipped.tsv`（入庫清單，驗收基準）、`data/verify-v18.txt`／`verify-v18-deployed.txt`。
+
+### 16.23 v19：P1 收尾——其餘 14 個科判家族的科判行也掛 CBETA（2026-11-13，正式名 sha `efe8a3d4…`，44.50 MiB）
+
+「科文→原文」原本只覆蓋 T1579（fam ''）與披尋記（fam 漢）兩個家族的科判行；v19 用 `zhu-spans-*.json` 的**細窗**（mode 非 K/no：D 書內現掛、LCS 對齊、缺口填補、子樹取窗）把其餘 14 個家族（釋遁基分手問持戒受決揚莊集雜劫）的科判行補上 `<聯 i="taisho?…#a-b">CBETA</聯>＋<嵌 n="原文"/>`——**新增 4,574 條科判行聯**（T1828 貢獻最多）。**粗窗（祖先繼承 K）刻意不掛**：樹上滿是同一窗的重複晶片沒有意義，粗窗的閱讀需求由段落層「所釋」覆蓋（§16.22）。至此三層模型在資料端閉環：原文（taisho.adb 外掛）← 科文（17 科判樹全家族可跳原文）← 注文（7 部 5,635 段落 ref）。
+
+驗收：anchor-check 94,632/0 FAIL；跨庫 25,915 種頁欄 0 FAIL；段落 ref 驗收與 v18 完全相同（5,635/5,635 PASS，本層不改段落資料）；樹 35 頁籤回歸綠。v18 舊檔備份 `out/ybh.adb.v18.bak`。消費端兩項缺陷（`embedSrc` 書名錯指、`mark` 窗尾截短 1-2 字 10 條）彙整進 `docs/prompt-adb-converter-v19-notes.md` 待轉 accelon26——**資料端至此再無可單獨推進的項目**，下一步（P4 融視圖、R4 頂齊複驗、R6/R7）都需要母區動碼。

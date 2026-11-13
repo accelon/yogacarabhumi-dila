@@ -163,7 +163,7 @@ const spans = new Map<string, { page: string; js: string; je: string; mode: stri
     }
   }
 }
-let taishoCnt = 0, embedJCnt = 0;
+let taishoCnt = 0, embedJCnt = 0, kepanZhuCnt = 0;
 
 // P2 注文段落 ref：注文各部釋文段 → 所釋原文 span（v18 一般化，取代 v17 只論釋一部）。
 // 三层由 span-build-zhu.ts（D 現掛／LCS 科判對齊／同子樹取窗／祖先繼承）＋ span-zhu.ts（A·K·Q 合併）產出：
@@ -181,6 +181,19 @@ let paraRefCnt = 0;
       const m = prefs.get(c[0]!) ?? new Map<number, { page: string; js: string; je: string; mode: string }>();
       m.set(+c[1]! - 1, { page: c[3]!, js: c[4] === '-1' ? '' : (c[4] ?? ''), je: c[5] === '-1' ? '' : (c[5] ?? ''), mode });
       prefs.set(c[0]!, m);
+    }
+  }
+}
+
+// P1 收尾（v19）：其餘 14 個科判家族的科判行也掛 CBETA 聯＋嵌——用 zhu-spans-*.json 的
+// 「細窗」（mode 非 K/no：D 書內現掛、LCS 對齊、缺口填補、子樹取窗）。粗窗（祖先繼承 K）不掛：
+// 會與祖先行的窗重複，且樹上滿是同一窗的晶片；粗窗的閱讀需求已由段落層（zhu-refs）覆蓋。
+const zhuSpans = new Map<string, { page: string; js: string; je: string; mode: string }>();
+{
+  const dir = 'D:/2026/_scratch-ybh';
+  for (const f of fs.readdirSync(dir).filter((x) => /^zhu-spans-.+\.json$/.test(x)).sort()) {
+    for (const r of JSON.parse(fs.readFileSync(`${dir}/${f}`, 'utf8')) as { base: string; kp: string; page: string; js: number; je: number; mode: string }[]) {
+      if (r.js >= 0 && r.mode !== 'K' && r.mode !== 'no') zhuSpans.set(`${r.base}#${r.kp}`, { page: r.page, js: String(r.js), je: String(r.je), mode: r.mode });
     }
   }
 }
@@ -381,7 +394,10 @@ function bodyLines(text: string, fam: string, childChain: string, base: string, 
       let body = postInline(inline(disp));
       if (anchor) { body = `<節聯 n="${encodeXmlAttr(base + '#' + anchor)}">${body}</節聯>`; jieCnt++; }
       // P1/P1b：T1579 與披尋記科判掛 CBETA 原文（聯=跳看＋反鏈；嵌 j=行內速覽）
-      const sp = (fam === '' || fam === '漢') && anchor ? spans.get(`${base}#${anchor}`) : undefined;
+      // v19：其餘 14 家族用 zhu-spans 細窗補齊（P1 收尾）；粗窗（K）不掛，見上註
+      const sp = (fam === '' || fam === '漢') && anchor ? spans.get(`${base}#${anchor}`)
+        : anchor ? zhuSpans.get(`${base}#${anchor}`) : undefined;
+      if (sp && !(fam === '' || fam === '漢')) kepanZhuCnt++;
       let tail = '';
       if (sp) {
         // v14：有 j 窗者聯升級 #a-b（跨庫精確定位＋高亮）；插值/無窗者留純頁欄
@@ -501,7 +517,7 @@ const out = path.join(OUTDIR, 'ybh.adb');
 fs.writeFileSync(out, res.file);
 console.log(`built ${out}: ${(res.file.length / 1048576).toFixed(2)} MiB in ${Date.now() - t0} ms — ${res.lines} lines, ${res.tokens} tokens, tags: ${res.tagNames.join(' ')}`);
 console.log('cachedKeys:', res.cachedKeys.join(' '));
-console.log(`互鏈：節聯 ${jieCnt}、CBETA 聯 ${taishoCnt}（內含注文段落 ref ${paraRefCnt}，另收攏同窗重複 ${paraDupCnt}）、CBETA 行內嵌 ${embedJCnt}、自指鏈行併除 ${selfMergeCnt}、梵漢剝除 ${delRefCnt}、文字 ${textCnt}、<錨> ${anchorCnt}、干支改名 ${renameCnt}`);
+console.log(`互鏈：節聯 ${jieCnt}、CBETA 聯 ${taishoCnt}（科判行 ${taishoCnt - paraRefCnt}＝v19 新增他家族 ${kepanZhuCnt}＋注文段落 ref ${paraRefCnt}，另收攏同窗重複 ${paraDupCnt}）、CBETA 行內嵌 ${embedJCnt}、自指鏈行併除 ${selfMergeCnt}、梵漢剝除 ${delRefCnt}、文字 ${textCnt}、<錨> ${anchorCnt}、干支改名 ${renameCnt}`);
 
 // ---- 產後驗收（驗收腳本本身也要被驗）：錨點逐條解析＋節點行核對＋已知負控 ----
 {
