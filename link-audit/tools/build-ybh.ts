@@ -42,7 +42,9 @@ const FAM: Record<string, string> = {
 // v15.3：大綱檔（-k）自成一族「綱」——實測其 a1 重啟 190 次、大寫鏈與小寫鏈交錯、
 // 全無 kpD：父層資訊在源檔已失，硬掛主樹會造出 462 個假兄弟。綱族獨立一頁籤，
 // 標「平列」如實呈現；各著作科判頁籤只收真 kpD 樹。
-const famOf = (p: { ser: string; kind: string }): string => p.kind === 'k' ? '綱' : (FAM[p.ser] ?? '');
+// v15.4：大綱頁籤每部一個（使用者：不要全部平列一起）。字族「大＋本部字」
+// （T1579→科大、披尋記→科大漢…），與主樹字族不撞；父層已失源檔，頁籤名保留「平列」誠實標註。
+const famOf = (p: { ser: string; kind: string }): string => p.kind === 'k' ? '大' + (FAM[p.ser] ?? '') : (FAM[p.ser] ?? '');
 
 // ---- 錨點索引（前置掃描）：實測 kpD 卷內唯一、跨卷重號（編號每卷重排）----
 const kpVols = new Map<string, Set<string>>();   // `${ser}#${kp}` → 出現的檔案 base 集合
@@ -365,11 +367,13 @@ for (const [ser, name] of WORKS) {
   const tiers = Array.from({ length: mx }, (_, i) => '科' + fam + String(i + 1).padStart(2, '0')).join(',');
   lines.push(`<隱><樹 s="*" t="${tiers}.">${esc(name)}科判</樹></隱>`);
 }
-// v15.3：綱族頁籤——大綱檔（-k）無錨、父層已失，獨立呈現，不混入任何科判樹
-if ((maxLevel.get('綱') ?? 0) > 0) {
-  const mx = maxLevel.get('綱')!;
-  const tiers = Array.from({ length: mx }, (_, i) => '科綱' + String(i + 1).padStart(2, '0')).join(',');
-  lines.push(`<隱><樹 s="*" t="${tiers}.">歷部大綱（平列）</樹></隱>`);
+// v15.4：每部一個大綱頁籤（無錨、平列如實標）
+for (const [ser, name] of WORKS) {
+  const ofam = '大' + (FAM[ser] ?? '');
+  const mx = maxLevel.get(ofam) ?? 0;
+  if (!mx) continue;
+  const tiers = Array.from({ length: mx }, (_, i) => '科' + ofam + String(i + 1).padStart(2, '0')).join(',');
+  lines.push(`<隱><樹 s="*" t="${tiers}.">${esc(name)}大綱（平列）</樹></隱>`);
 }
 const stats: string[] = [];
 let totalJie = 0, totalNotes = 0;
