@@ -101,6 +101,41 @@ for (const p of picked) {
 }
 let jieCnt = 0, textCnt = 0, anchorCnt = 0;
 
+// v16 鏡像還原：等長且正規化標題吻合 ≥95% 的部，大綱逐行改用主卷的真 tier（父層復活）；
+// 不合格者保留 v15 推導制式＋「平列」標籤。大綱節點一律不掛錨（同 work NS 同值會與主卷
+// 節點在 nsMap 撞鍵、後寫覆寫，指錯）。
+const mirrorNorm = (s: string) => s
+  .replace(/\^kp[#A-Za-z0-9_-]+/g, '')
+  .replace(/^\s*(?:[甲乙丙丁戊己庚辛壬癸子丑寅卯辰巳午未申酉戌亥][一二三四五六七八九十]{1,3}、|[A-Za-z][0-9]*[ .、]?)/, '')
+  .replace(/[0-9０-９\s　、，。：；（）()·「」『』?？]/g, '').slice(0, 10);
+const outlineTiers = new Map<string, number[]>();   // ser → 大綱每行 tier（鏡像合格＝主卷序列）
+const mirrorOK = new Map<string, boolean>();
+for (const [ser] of WORKS) {
+  const kf = picked.find(p => p.ser === ser && p.kind === 'k');
+  if (!kf) continue;
+  const kl: number[] = []; const kt: string[] = [];
+  for (const m of fs.readFileSync(path.join(ROOT, kf.file), 'utf8').matchAll(/^(#{1,6})\s+(.*)$/gm)) {
+    kl.push(headTier(m[2]!, m[1]!.length)); kt.push(mirrorNorm(m[2]!));
+  }
+  const mt: string[] = []; const msT: number[] = [];
+  for (const p of picked.filter(p2 => p2.ser === ser && p2.kind === 'main').sort((a, b) => a.vol - b.vol)) {
+    for (const m of fs.readFileSync(path.join(ROOT, p.file), 'utf8').matchAll(/^(#{1,6})\s+(.*)$/gm)) {
+      msT.push(headTier(m[2]!, m[1]!.length)); mt.push(mirrorNorm(m[2]!));
+    }
+  }
+  let ok = false;
+  if (kt.length && kt.length === mt.length) {
+    let same = 0;
+    for (let i = 0; i < kt.length; i++) if (mt[i] && mt[i] === kt[i]) same++;
+    ok = 100 * same / kt.length >= 95;
+  }
+  mirrorOK.set(ser, ok);
+  outlineTiers.set(ser, ok ? msT : kl);
+  const ofam = '大' + (FAM[ser] ?? '');
+  maxLevel.set(ofam, Math.max(...(ok ? msT : kl), 1));
+}
+console.log('鏡像合格（掛回真父層）:', WORKS.filter(([s]) => mirrorOK.get(s)).map(([s]) => s).join(' ') || '無');
+
 // v5.1（UI buildTree 嵌套規則）：父節點必須用「自己的 t=」宣告子鏈，否則子層淪為根級平舖。
 // 章 按所属著作宣告該家族科判鏈；科X01 宣告 科X02…（T1579 家族無字 = 科01…）。
 function famChain(ser: string): string {
@@ -204,7 +239,8 @@ let delRefCnt = 0, selfMergeCnt = 0;
 function postInline(s: string): string {
   return s.replace(/《\u0001》/g, '').replace(/\u0001/g, '');
 }
-function bodyLines(text: string, fam: string, childChain: string, base: string): string[] {
+function bodyLines(text: string, fam: string, childChain: string, base: string, mirror?: number[]): string[] {
+  let mi = 0;
   // 兩趟（v8.1）：天干地支序號是「父內」編號（每換一個上級父即復位），不等於 kpD 卷內流水號，
   // 故先按標題縮排做樹走訪重算父內序，得 (tier, 父內序) → 標題；再逐段匹配（同序多候選時比標題文字）。
   const rawLines = text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').split('\n');
@@ -301,7 +337,8 @@ function bodyLines(text: string, fam: string, childChain: string, base: string):
       const am = t.match(/\^(kpD(\d+)-(\d+))/);
       const anchor = am ? am[1] : '';
       // 深度：與 headTier 同口径（kpD tier → 字母前綴 → markdown 層級），家族前綴分樹
-      const tier = headTier(t, hd[1].length);
+      const tier = mirror && mi < mirror.length ? mirror[mi++] : headTier(t, hd[1].length);
+      if (!mirror) mi++;
       const tag = '科' + fam + String(tier).padStart(2, '0');
       // 家族根層（01）自宣告子鏈：UI buildTree 只認父實例的 t=，不然子層會淪為根級平舖
       const selfT = tier === 1 && childChain ? ` t="${encodeXmlAttr(childChain)}"` : '';
@@ -367,13 +404,13 @@ for (const [ser, name] of WORKS) {
   const tiers = Array.from({ length: mx }, (_, i) => '科' + fam + String(i + 1).padStart(2, '0')).join(',');
   lines.push(`<隱><樹 s="*" t="${tiers}.">${esc(name)}科判</樹></隱>`);
 }
-// v15.4：每部一個大綱頁籤（無錨、平列如實標）
+// v16：鏡像合格部掛回真父層（頁籤名去「平列」）；不合格者保留推導制式＋平列註記
 for (const [ser, name] of WORKS) {
   const ofam = '大' + (FAM[ser] ?? '');
   const mx = maxLevel.get(ofam) ?? 0;
   if (!mx) continue;
   const tiers = Array.from({ length: mx }, (_, i) => '科' + ofam + String(i + 1).padStart(2, '0')).join(',');
-  lines.push(`<隱><樹 s="*" t="${tiers}.">${esc(name)}大綱（平列）</樹></隱>`);
+  lines.push(`<隱><樹 s="*" t="${tiers}.">${esc(name)}大綱${mirrorOK.get(ser) ? '' : '（平列）'}</樹></隱>`);
 }
 const stats: string[] = [];
 let totalJie = 0, totalNotes = 0;
@@ -388,7 +425,7 @@ for (const [ser, name] of WORKS) {
     // v14.2：章不再宣告子鏈——鏈由 篇 自宣告（封閉詞彙），主樹不再經 章.t 把 16 個
     // 家族鏈全拉進來（170k 行 → ~12k）。家族樹的嵌套靠 科X01 自宣告子鏈，不受影響。
     lines.push(`<章 id="${encodeXmlAttr(p.base)}"><卷次 id="${encodeXmlAttr(p.base)}"/>${esc(label)}</章>`);
-    const bl = bodyLines(fs.readFileSync(path.join(ROOT, p.file), 'utf8'), famOf(p), famChildChain(famOf(p)), p.base);
+    const bl = bodyLines(fs.readFileSync(path.join(ROOT, p.file), 'utf8'), famOf(p), famChildChain(famOf(p)), p.base, p.kind === 'k' ? outlineTiers.get(ser) : undefined);
     totalJie += bl.filter(x => /^<科[一-鿿]?\d\d/.test(x)).length;
     totalNotes += bl.filter(x => x.startsWith('<釋')).length;
     for (const l of bl) lines.push(l);
