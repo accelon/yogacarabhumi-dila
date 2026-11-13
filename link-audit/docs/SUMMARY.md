@@ -700,3 +700,7 @@ adb-converter 交付通用節點錨點（`page-text.ts nodeAnchorInfo/nodeSpanTe
 - **教記一樁（驗收假警報）**：verify-j 首輪 24/25、繼而 22/25 的「不符」全是比對口徑錯——引文 key 帶標點（`問：如是五事`）而 HTML 保留原文標點，`includes` 必然落空；兩邊都剝標點後 **25/25**。j 索引本身自始正確（真實頁序 38＝計算 38）。
 - **終驗**：CBETA 聯 35,025（1,772 種頁欄跨庫 0 FAIL）、行內嵌 24,428、庫內 anchor-check 94,632 種 0 FAIL、17 樹 roots=17 如常。成品 42.56 MiB。
 - 後續：P2 注文段落 ref、P4 融視圖（依賴 span 已備）；T1580/T1828 等其餘注文部之 span 為同法則延伸（引文在「如論曰」後段，規則另立）。
+
+### 16.13 v14：CBETA 聯升級頁欄#a-b（精確字位）（2026-11-13，正式名 D:\accelon3\ybh.adb）
+
+R4 前提經產品碼路實證（`probe-charpos.ts`：`anchorVa('30p279a#40-44')` 正確剝尾綴回頁 VA、`parseCharPosition` 拆解無誤），accelon26 處置單亦確認跨庫右欄依 `mark.xrefHit` 捲動高亮——v14 把 24,428 條有 j 窗的 CBETA 聯升級 `i="taisho?頁欄#a-b"`（插值/無窗者留純頁欄），點「CBETA」直接落在該科原文字位並高亮，不再只落頁首。驗收：跨庫 24,585 種形式 0 FAIL、anchor-check 94,632 0 FAIL、成品 42.66 MiB。頂齊（block:'start'）待 accelon26 一行改，改後**無需重建**——資料已含字位。
