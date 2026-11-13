@@ -39,6 +39,11 @@ const FAM: Record<string, string> = {
   T1605: '集', T1606: '雜', X0794: '劫',
 };
 
+// v15.3：大綱檔（-k）自成一族「綱」——實測其 a1 重啟 190 次、大寫鏈與小寫鏈交錯、
+// 全無 kpD：父層資訊在源檔已失，硬掛主樹會造出 462 個假兄弟。綱族獨立一頁籤，
+// 標「平列」如實呈現；各著作科判頁籤只收真 kpD 樹。
+const famOf = (p: { ser: string; kind: string }): string => p.kind === 'k' ? '綱' : (FAM[p.ser] ?? '');
+
 // ---- 錨點索引（前置掃描）：實測 kpD 卷內唯一、跨卷重號（編號每卷重排）----
 const kpVols = new Map<string, Set<string>>();   // `${ser}#${kp}` → 出現的檔案 base 集合
 const baseKps = new Set<string>();               // `${base}#${kp}`
@@ -89,7 +94,7 @@ for (const p of picked) {
   for (const m of t.matchAll(/\^(app[A-Za-z0-9_-]+)\s*$/gm)) appDefs.add(`${p.base}#${m[1]}`);
   for (const m of t.matchAll(/^(#{1,6})\s+(.*)$/gm)) {
     const lv = headTier(m[2]!, m[1]!.length);
-    maxLevel.set(p.ser, Math.max(maxLevel.get(p.ser) ?? 0, lv));
+    maxLevel.set(famOf(p), Math.max(maxLevel.get(famOf(p)) ?? 0, lv));
   }
 }
 let jieCnt = 0, textCnt = 0, anchorCnt = 0;
@@ -102,9 +107,8 @@ function famChain(ser: string): string {
   if (!mx) return '';
   return Array.from({ length: mx }, (_, i) => '科' + fam + String(i + 1).padStart(2, '0')).join(',') + '.';
 }
-function famChildChain(ser: string): string {
-  const fam = FAM[ser] ?? '';
-  const mx = maxLevel.get(ser) ?? 0;
+function famChildChain(fam: string): string {
+  const mx = maxLevel.get(fam) ?? 0;
   if (mx < 2) return '';
   return Array.from({ length: mx - 1 }, (_, i) => '科' + fam + String(i + 2).padStart(2, '0')).join(',') + '.';
 }
@@ -356,10 +360,16 @@ lines.push(`<隱><樹 s="*" l="註,釋" t="篇,章,${KE_TIERS}.">瑜伽師地論
 for (const [ser, name] of WORKS) {
   const fam = FAM[ser];
   if (!fam) continue;                       // T1579 已在主樹
-  const mx = maxLevel.get(ser) ?? 0;
+  const mx = maxLevel.get(fam) ?? 0;
   if (!mx) continue;
   const tiers = Array.from({ length: mx }, (_, i) => '科' + fam + String(i + 1).padStart(2, '0')).join(',');
   lines.push(`<隱><樹 s="*" t="${tiers}.">${esc(name)}科判</樹></隱>`);
+}
+// v15.3：綱族頁籤——大綱檔（-k）無錨、父層已失，獨立呈現，不混入任何科判樹
+if ((maxLevel.get('綱') ?? 0) > 0) {
+  const mx = maxLevel.get('綱')!;
+  const tiers = Array.from({ length: mx }, (_, i) => '科綱' + String(i + 1).padStart(2, '0')).join(',');
+  lines.push(`<隱><樹 s="*" t="${tiers}.">歷部大綱（平列）</樹></隱>`);
 }
 const stats: string[] = [];
 let totalJie = 0, totalNotes = 0;
@@ -374,7 +384,7 @@ for (const [ser, name] of WORKS) {
     // v14.2：章不再宣告子鏈——鏈由 篇 自宣告（封閉詞彙），主樹不再經 章.t 把 16 個
     // 家族鏈全拉進來（170k 行 → ~12k）。家族樹的嵌套靠 科X01 自宣告子鏈，不受影響。
     lines.push(`<章 id="${encodeXmlAttr(p.base)}"><卷次 id="${encodeXmlAttr(p.base)}"/>${esc(label)}</章>`);
-    const bl = bodyLines(fs.readFileSync(path.join(ROOT, p.file), 'utf8'), FAM[p.ser] ?? '', famChildChain(ser), p.base);
+    const bl = bodyLines(fs.readFileSync(path.join(ROOT, p.file), 'utf8'), famOf(p), famChildChain(famOf(p)), p.base);
     totalJie += bl.filter(x => /^<科[一-鿿]?\d\d/.test(x)).length;
     totalNotes += bl.filter(x => x.startsWith('<釋')).length;
     for (const l of bl) lines.push(l);
