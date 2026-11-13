@@ -105,18 +105,18 @@ function famChildChain(ser: string): string {
 const CHAIN: Record<string, string> = {};
 for (const [ser] of WORKS) CHAIN[ser] = famChain(ser);
 
-// P1 span 表：T1579 科判 → CBETA 頁欄（span-build.ts 產出；mode T/N=精確、I=插值）
-const spans = new Map<string, { page: string; mode: string }>();
+// P1/P1b span 表：T1579 與披尋記科判 → CBETA 頁欄＋行內 j（span-index.ts 產出）
+const spans = new Map<string, { page: string; js: string; je: string; mode: string }>();
 {
-  const sp = 'D:/2026/_scratch-ybh/spans-t1579.tsv';
+  const sp = 'D:/2026/_scratch-ybh/spans-j.tsv';
   if (fs.existsSync(sp)) {
     for (const r of fs.readFileSync(sp, 'utf8').split('\n').slice(1)) {
       const c = r.split('\t');
-      if (c.length >= 4 && c[2]) spans.set(`${c[0]}#${c[1]}`, { page: c[2]!, mode: c[3]! });
+      if (c.length >= 4 && c[3] && (c[0] === 'T1579' || c[0] === 'PXJ')) spans.set(`${c[1]}#${c[2]}`, { page: c[3]!, js: c[4] ?? '', je: c[5] ?? '', mode: c[6] ?? '' });
     }
   }
 }
-let taishoCnt = 0;
+let taishoCnt = 0, embedJCnt = 0;
 
 // ---- 行轉換 ----
 const esc = encodeXmlText;
@@ -303,10 +303,14 @@ function bodyLines(text: string, fam: string, childChain: string, base: string):
       // v10：標題自掛節聯＝點標題即捲動＋目錄游標同步（「點回同步樹」），鏈行自指段因此可併掉
       let body = postInline(inline(disp));
       if (anchor) { body = `<節聯 n="${encodeXmlAttr(base + '#' + anchor)}">${body}</節聯>`; jieCnt++; }
-      // P1：T1579 科判挂 CBETA 原文頁欄聯（走 聯 i= 途徑 → taisho 端吃反鏈）
-      const sp = fam === '' && anchor ? spans.get(`${base}#${anchor}`) : undefined;
+      // P1/P1b：T1579 與披尋記科判掛 CBETA 原文（聯=跳看＋反鏈；嵌 j=行內速覽）
+      const sp = (fam === '' || fam === '漢') && anchor ? spans.get(`${base}#${anchor}`) : undefined;
       let tail = '';
-      if (sp) { tail = `<聯 i="taisho?${encodeXmlAttr(sp.page)}">CBETA${sp.mode === 'I' ? '≈' : ''}</聯>`; taishoCnt++; }
+      if (sp) {
+        tail = `<聯 i="taisho?${encodeXmlAttr(sp.page)}">CBETA</聯>`;
+        taishoCnt++;
+        if (sp.js && sp.je) { tail += `<嵌 i="taisho?${encodeXmlAttr(sp.page)}" j="${sp.js}-${sp.je}" n="原文"/>`; embedJCnt++; }
+      }
       out.push(anchor ? `<${tag}${selfT} n="${encodeXmlAttr(anchor)}"${aAttr}>${body}</${tag}>${tail}` : `<${tag}${selfT}>${body}</${tag}>${tail}`);
       continue;
     }
@@ -383,7 +387,7 @@ const out = path.join(OUTDIR, 'ybh.adb');
 fs.writeFileSync(out, res.file);
 console.log(`built ${out}: ${(res.file.length / 1048576).toFixed(2)} MiB in ${Date.now() - t0} ms — ${res.lines} lines, ${res.tokens} tokens, tags: ${res.tagNames.join(' ')}`);
 console.log('cachedKeys:', res.cachedKeys.join(' '));
-console.log(`互鏈：節聯 ${jieCnt}（含標題自掛）、科文鏈聯 ${kemonCnt}、自指鏈行併除 ${selfMergeCnt}、梵漢引用不入庫 ${delRefCnt}、文字參照 ${textCnt}、<錨> ${anchorCnt}、干支改名 ${renameCnt}`);
+console.log(`互鏈：節聯 ${jieCnt}、CBETA 聯 ${taishoCnt}、CBETA 行內嵌 ${embedJCnt}、自指鏈行併除 ${selfMergeCnt}、梵漢剝除 ${delRefCnt}、文字 ${textCnt}、<錨> ${anchorCnt}、干支改名 ${renameCnt}`);
 
 // ---- 產後驗收（驗收腳本本身也要被驗）：錨點逐條解析＋節點行核對＋已知負控 ----
 {
