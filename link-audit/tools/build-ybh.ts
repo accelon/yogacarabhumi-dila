@@ -1,0 +1,427 @@
+#!/usr/bin/env bun
+/**
+ * yogacarabhumi-dila 漢文 → ybh.adb
+ * 只收漢文著作（依 DILA 權威略符表），排除梵本/藏譯。
+ * 結構：篇（著作，亦是搜尋分群）＞章（卷）；科判標題→<節 n="kpD…">；腳註→註/釋。
+ * 互鏈 v3：adb-converter 已上「通用節點錨點」（NS#值 篇級解析，见 prompt-ybh-anchor-adopt.md）。
+ *   互鏈 v4（卷級別名 d224efd 已上線）：目標卷有定義 → `W-V#kp` 卷級嵌；全著作唯一点 → 篇級嵌；
+ *   撞號無定義／死錨／未入庫／校注錨 → 文字。負控翻為 ALIAS-ARRIVED＋語義回歸 last≠first。
+ *   <篇 id>／<章 id> 已加；產出 works.tsv＋anchor-check.tsv 隨檔驗收。
+ */
+import fs from 'node:fs';
+import path from 'node:path';
+import { authorAdb } from 'D:/2026/adb-converter/ts/src/adbauthor.ts';
+import { encodeXmlAttr, encodeXmlText } from 'D:/2026/adb-converter/ts/src/xml-entities.ts';
+import { AdbReader, SyncIO } from 'D:/2026/adb-converter/ts/src/accelon26/adb.ts';
+import { VaPaMapper } from 'D:/2026/adb-converter/ts/src/accelon26/vapa.ts';
+import { nodeAnchorInfo } from 'D:/2026/adb-converter/ts/src/accelon26/page-text.ts';
+
+const ROOT = 'D:/2026/yogacarabhumi-dila';
+const OUTDIR = 'D:/2026/_scratch-ybh/ybh';
+fs.mkdirSync(OUTDIR, { recursive: true });
+
+// 漢文著作（權威略符表）：代號 → 書名；順序即目錄順序
+const WORKS: [string, string][] = [
+  ['T1579', '瑜伽師地論'], ['PXJ-H', '瑜伽師地論科句披尋記'], ['T1580', '瑜伽師地論釋'],
+  ['T1828', '瑜伽論記'], ['T1829', '瑜伽師地論略纂'], ['T2801', '瑜伽論分門記'], ['T2802', '瑜伽論手記'],
+  ['T2259', '瑜伽論問答'], ['T1581', '菩薩地持經'], ['T1582', '菩薩善戒經'], ['T1583', '菩薩受戒法'],
+  ['T1584', '決定藏論'], ['T1602', '顯揚聖教論'], ['T1604', '大乘莊嚴經論'],
+  ['T1605', '大乘阿毘達磨集論'], ['T1606', '大乘阿毘達磨雜集論'], ['X0794', '劫章頌'],
+  // T0099 雜阿含經：作者 2026-11-12 定案不收（獨立阿含部，非本地分引文範圍）
+];
+const CN = new Set(WORKS.map(w => w[0]));
+const seriesOf = (b: string) => (b.match(/^(.*)-(?:\d+|k|a)$/) || [, b])[1];
+// v5：每部著作一棵科判樹＝目錄一個頁籤（作者 2026-11-13：科判也是一顆樹）。
+// 標籤家族：科＋一字＋層號（T1579 沿用既有的 科NN，不動舊錨點）。
+const FAM: Record<string, string> = {
+  T1579: '', 'PXJ-H': '漢', T1580: '釋', T1828: '遁', T1829: '基', T2801: '分', T2802: '手',
+  T2259: '問', T1581: '持', T1582: '戒', T1583: '受', T1584: '決', T1602: '揚', T1604: '莊',
+  T1605: '集', T1606: '雜', X0794: '劫',
+};
+
+// ---- 錨點索引（前置掃描）：實測 kpD 卷內唯一、跨卷重號（編號每卷重排）----
+const kpVols = new Map<string, Set<string>>();   // `${ser}#${kp}` → 出現的檔案 base 集合
+const baseKps = new Set<string>();               // `${base}#${kp}`
+const appDefs = new Set<string>();               // `${base}#${appID}`（-a 校勘記行尾 ^app… 定義；權威源 xml-p5\T）
+
+// ---- 選檔 + 語言覆核 ----
+const all = fs.readdirSync(ROOT).filter(f => f.endsWith('.md'));
+const picked: { file: string; base: string; ser: string; vol: number; kind: 'main' | 'k' | 'a' }[] = [];
+const rejected: string[] = [];
+for (const f of all) {
+  const base = f.replace(/\.md$/, '');
+  const ser = seriesOf(base);
+  if (!CN.has(ser)) { rejected.push(base); continue; }
+  const m = base.match(/-(\d+)$/);
+  picked.push({ file: f, base, ser, vol: m ? +m[1] : (/-k$/.test(base) ? 1e9 : 1e9 - 1), kind: m ? 'main' : (/-k$/.test(base) ? 'k' : 'a') });
+}
+// 語言覆核：漢文檔的 CJK 佔比應壓倒性
+const langReport: string[] = [];
+for (const p of picked) {
+  const t = fs.readFileSync(path.join(ROOT, p.file), 'utf8');
+  const cjk = (t.match(/[\u4e00-\u9fff]/g) || []).length;
+  const tib = (t.match(/[\u0f00-\u0fff]/g) || []).length;
+  const lat = (t.match(/[A-Za-z]/g) || []).length;
+  const tot = cjk + tib + lat || 1;
+  if (cjk / tot < 0.8) langReport.push(`${p.base}: CJK ${(100 * cjk / tot).toFixed(1)}% tib ${tib} lat ${lat}`);
+}
+
+// 前置掃描：只認「標題行定義」的 kpD（引用不算定義），供嵌/文字判定與驗收用
+const maxLevel = new Map<string, number>();   // ser → 用到的最深科判層（1..54）
+function headTier(title: string, hashes: number): number {
+  const am = /\^(kpD(\d+)-\d+)/.exec(title);
+  const lm = /^([A-Z])\d/.exec(title.trim());
+  const tier = am ? +am[2]! : (lm ? lm[1]!.charCodeAt(0) - 64 : hashes);
+  return Math.max(1, Math.min(54, tier));
+}
+for (const p of picked) {
+  const t = fs.readFileSync(path.join(ROOT, p.file), 'utf8');
+  for (const m of t.matchAll(/^#{1,6} .*?\^(kpD\d+-\d+)\s*$/gm)) {
+    kpVols.set(`${p.ser}#${m[1]}`, (kpVols.get(`${p.ser}#${m[1]}`) ?? new Set()).add(p.base));
+    baseKps.add(`${p.base}#${m[1]}`);
+  }
+  for (const m of t.matchAll(/\^(app[A-Za-z0-9_-]+)\s*$/gm)) appDefs.add(`${p.base}#${m[1]}`);
+  for (const m of t.matchAll(/^(#{1,6})\s+(.*)$/gm)) {
+    const lv = headTier(m[2]!, m[1]!.length);
+    maxLevel.set(p.ser, Math.max(maxLevel.get(p.ser) ?? 0, lv));
+  }
+}
+let jieCnt = 0, textCnt = 0, anchorCnt = 0;
+
+// v5.1（UI buildTree 嵌套規則）：父節點必須用「自己的 t=」宣告子鏈，否則子層淪為根級平舖。
+// 章 按所属著作宣告該家族科判鏈；科X01 宣告 科X02…（T1579 家族無字 = 科01…）。
+function famChain(ser: string): string {
+  const fam = FAM[ser] ?? '';
+  const mx = maxLevel.get(ser) ?? 0;
+  if (!mx) return '';
+  return Array.from({ length: mx }, (_, i) => '科' + fam + String(i + 1).padStart(2, '0')).join(',') + '.';
+}
+function famChildChain(ser: string): string {
+  const fam = FAM[ser] ?? '';
+  const mx = maxLevel.get(ser) ?? 0;
+  if (mx < 2) return '';
+  return Array.from({ length: mx - 1 }, (_, i) => '科' + fam + String(i + 2).padStart(2, '0')).join(',') + '.';
+}
+const CHAIN: Record<string, string> = {};
+for (const [ser] of WORKS) CHAIN[ser] = famChain(ser);
+
+// ---- 行轉換 ----
+const esc = encodeXmlText;
+function inline(s: string): string {
+  let out = '';
+  let last = 0;
+  // wikilink（含錨點）、markdown 連結、腳註引用
+  const re = /\[\[([^\]|#]+)(?:#([^\]|]*))?(?:\|([^\]]*))?\]\]|\[([^\]]+)\]\(([^)]+)\)|\[\^([^\]]+)\]/g;
+  for (const m of s.matchAll(re)) {
+    out += esc(s.slice(last, m.index));
+    last = m.index + m[0].length;
+    if (m[1] !== undefined) {
+      const target = m[1].trim();
+      const anchor = (m[2] || '').replace(/^\^/, '').trim();
+      const label = (m[3] || target).trim();
+      const tSer = seriesOf(target);
+      const cleanAnchor = anchor.split(/[\s"]/)[0]!;   // 擋下 CT 系帶屬性的錨（app805_4" data-page=…）
+      if (/^kpD\d+-\d+$/.test(cleanAnchor) && CN.has(tSer)) {
+        if (baseKps.has(`${target}#${cleanAnchor}`)) {
+          // 目標卷自身定義 → 卷級 節聯（精確、輕量捲動；嵌保留給未來 科文→原文）
+          out += `<節聯 n="${encodeXmlAttr(target + '#' + cleanAnchor)}">${esc(label)}</節聯>`;
+          jieCnt++;
+        } else if ((kpVols.get(`${tSer}#${cleanAnchor}`) ?? new Set()).size === 1) {
+          out += `<節聯 n="${encodeXmlAttr(tSer + '#' + cleanAnchor)}">${esc(label)}</節聯>`;
+          jieCnt++;
+        } else {
+          out += `《${esc(label)}》〔${esc(target)}#${esc(cleanAnchor)}〕`;
+          textCnt++;
+        }
+      } else if (/^app[A-Za-z0-9_-]+$/.test(cleanAnchor) && CN.has(tSer) && appDefs.has(`${target}#${cleanAnchor}`)) {
+        // 校注引用 → 節聯到 -a 檔的 <錨>（DILA 轉錄自 CBETA xml-p5\T，ID 同鍵）
+        out += `<節聯 n="${encodeXmlAttr(target + '#' + cleanAnchor)}">${esc(label)}</節聯>`;
+        jieCnt++;
+      } else if (!CN.has(tSer)) {
+        // v10：梵漢（未入庫系列）鏈結先不進 adb（作者 2026-11-13 定案）。
+        // 哨兵 \u0001 由 bodyLines 剝除，連外圍《》一併吞掉，不留空書名號。
+        out += '\u0001';
+        delRefCnt++;
+      } else {
+        out += `《${esc(label)}》〔${esc(target)}${anchor ? '#' + esc(cleanAnchor) : ''}〕`;
+        textCnt++;
+      }
+    } else if (m[4] !== undefined) {
+      // markdown 連結：只留顯示文字（梵本對照等外部檔不在本庫，不發死連結）
+      const label = m[4].trim(); const url = (m[5] || '').trim();
+      out += /skt|samahita/i.test(url) ? `〔梵本對照 ${esc(label.replace(/^samāhitā bhūmiḥ skt#?/, '§'))}〕` : `《${esc(label)}》`;
+    } else if (m[6] !== undefined) {
+      out += `<註 n="${encodeXmlAttr(m[6].trim())}"/>`;
+    }
+  }
+  out += esc(s.slice(last));
+  return out;
+}
+// ---- v8 科文互鏈（方案 A）：正文天干地支科號 → <節聯> 指回本卷標題節點 ----
+const GAN = '甲乙丙丁戊己庚辛壬癸';
+const ZHI = '子丑寅卯辰巳午未申酉戌亥';
+const tierOfChar = (c: string): number => { const g = GAN.indexOf(c); if (g >= 0) return g + 1; const z = ZHI.indexOf(c); return z >= 0 ? z + 11 : 0; };
+function cnParse(t: string): number {
+  const U = '一二三四五六七八九';
+  if (!t) return 0;
+  if (t === '十') return 10;
+  let m = /^十(.)$/.exec(t); if (m) { const i = U.indexOf(m[1]!); return i >= 0 ? 10 + i + 1 : 0; }
+  m = /^(.)十(.?)$/.exec(t); if (m) { const a = U.indexOf(m[1]!) + 1; if (a < 1) return 0; const u = m[2] ? U.indexOf(m[2]!) + 1 : 0; return a * 10 + u; }
+  if (t.length === 1) { const i = U.indexOf(t); return i >= 0 ? i + 1 : 0; }
+  return 0;
+}
+let kemonCnt = 0;
+const KEMON_RE = /^([甲乙丙丁戊己庚辛壬癸子丑寅卯辰巳午未申酉戌亥])([一二三四五六七八九十]{1,3})、(.*)$/;
+let renameCnt = 0;
+let delRefCnt = 0, selfMergeCnt = 0;
+
+// v10：剝哨兵（未入庫系列引用），連外圍《》一併吞
+function postInline(s: string): string {
+  return s.replace(/《\u0001》/g, '').replace(/\u0001/g, '');
+}
+function bodyLines(text: string, fam: string, childChain: string, base: string): string[] {
+  // 兩趟（v8.1）：天干地支序號是「父內」編號（每換一個上級父即復位），不等於 kpD 卷內流水號，
+  // 故先按標題縮排做樹走訪重算父內序，得 (tier, 父內序) → 標題；再逐段匹配（同序多候選時比標題文字）。
+  const rawLines = text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').split('\n');
+  type Hd = { tier: number; seqInVol: number; anchor: string; title: string; seqInParent: number; lineIdx: number };
+  const hds: Hd[] = [];
+  rawLines.forEach((ln, li) => {
+    const hm = /^(#{1,6})\s+(.*)$/.exec(ln);
+    if (!hm) return;
+    const am2 = /\^(kpD(\d+)-(\d+))/.exec(hm[2]!);
+    if (!am2) return;
+    const tt = hm[2]!.replace(/\s*\^kpD\d+-\d+\s*$/, '').replace(/\^kp#[^\s（]*/g, '').trim();
+    hds.push({
+      tier: +am2[2]!, seqInVol: +am2[3]!, anchor: am2[1]!,
+      title: tt.replace(/^[A-Z]?\d*\s*/, '').trim(), seqInParent: 0, lineIdx: li,
+    });
+  });
+  {
+    const stack: Hd[] = [];
+    const cnt = new Map<number, number>();
+    for (const h of hds) {
+      while (stack.length && stack[stack.length - 1]!.tier >= h.tier) stack.pop();
+      stack.push(h);
+      cnt.set(h.tier, (cnt.get(h.tier) ?? 0) + 1);
+      for (let t2 = h.tier + 1; t2 <= 60; t2++) if (cnt.has(t2)) cnt.set(t2, 0);
+      h.seqInParent = cnt.get(h.tier) ?? 1;
+    }
+  }
+  const byKey = new Map<string, Hd[]>();
+  for (const h of hds) {
+    const k = `${h.tier}-${h.seqInParent}`;
+    (byKey.get(k) ?? byKey.set(k, []).get(k)!).push(h);
+  }
+  // v9 認領趟：先於輸出跑完全檔鏈行，得 anchor → 干支標籤（「丙二、」含逗號）。
+  // 主路＝(tier,父內序)＋標題前綴＋行距最近；④修正＝同層標題優先反查（限 30 行內）。
+  const labelOf = new Map<string, string>();
+  const nearest = (list: Hd[], li: number): Hd =>
+    list.reduce((a, b) => (Math.abs(b.lineIdx - li) < Math.abs(a.lineIdx - li) ? b : a));
+  rawLines.forEach((ln, li) => {
+    if (/^#/.test(ln) || /^\[\^/.test(ln) || /^《/.test(ln)) return;
+    for (const seg of ln.split('　')) {
+      const m = KEMON_RE.exec(seg.trim());
+      if (!m) continue;
+      const tier = tierOfChar(m[1]!); const seq = cnParse(m[2]!);
+      const rest = m[3]!.trim();
+      const label = m[1]! + m[2]! + '、';
+      let h: Hd | undefined;
+      const cands = tier && seq ? byKey.get(`${tier}-${seq}`) : undefined;
+      if (cands?.length) {
+        const good = cands.filter((c) => c.title && rest.startsWith(c.title));
+        if (good.length) h = nearest(good, li);
+      }
+      if (!h && tier) {   // ④：號錯位時退而求其次——同層、標題文字吻合、30 行內
+        const alt = hds.filter((c) => c.tier === tier && c.title && rest.startsWith(c.title) && Math.abs(c.lineIdx - li) <= 30);
+        if (alt.length) h = nearest(alt, li);
+      }
+      if (h && !labelOf.has(h.anchor)) labelOf.set(h.anchor, label);
+    }
+  });
+  function kemonLink(line: string, li: number): string {
+    const segs = line.split('　');
+    let hit = false, sawSelf = false;
+    const outSegs = segs.map((seg) => {
+      const m = /^([甲乙丙丁戊己庚辛壬癸子丑寅卯辰巳午未申酉戌亥])([一二三四五六七八九十]{1,3})、(.*)$/.exec(seg.trim());
+      if (!m) return seg;
+      const tier = tierOfChar(m[1]!); const seq = cnParse(m[2]!);
+      const cands = tier && seq ? byKey.get(`${tier}-${seq}`) : undefined;
+      if (!cands?.length) return seg;
+      const rest = m[3]!.trim();
+      const good = cands.filter((c) => c.title && rest.startsWith(c.title));
+      if (!good.length) return seg;
+      const h = good.reduce((a, b) => (Math.abs(b.lineIdx - li) < Math.abs(a.lineIdx - li) ? b : a));
+      // v10 合併：段指向的標題就在本行 ±3 行內（即該行的「現行科」）→ 標題自己已是節聯，
+      // 此段不再包聯；若整行只有現行科（純自指鏈行）→ 整行刪除，信息併進標題。
+      if (Math.abs(h.lineIdx - li) <= 12) { sawSelf = true; return seg; }
+      const cut = seg.indexOf(h.title) + h.title.length;
+      hit = true; kemonCnt++;
+      return `<節聯 n="${encodeXmlAttr(base + '#' + h.anchor)}">${seg.slice(0, cut)}</節聯>${seg.slice(cut)}`;
+    });
+    if (sawSelf && !hit) { selfMergeCnt++; return ''; }
+    return hit ? outSegs.join('　') : line;
+  }
+  const out: string[] = [];
+  for (const raw of text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').split('\n')) {
+    let ln = raw;
+    // 腳註定義 [^n]: body → <釋 n="n">body</釋>
+    const fd = ln.match(/^\s*\[\^([^\]]+)\]:\s?(.*)$/);
+    if (fd) { out.push(`<釋 n="${encodeXmlAttr(fd[1].trim())}">${postInline(inline(fd[2]))}</釋>`); continue; }
+    // 標題（可能帶 kpD 錨點）→ 科判樹節點；深度用 kpD tier（無 kpD 時退回 markdown 層級）
+    const hd = ln.match(/^(#{1,6})\s+(.*)$/);
+    if (hd) {
+      let t = hd[2];
+      const am = t.match(/\^(kpD(\d+)-(\d+))/);
+      const anchor = am ? am[1] : '';
+      // 深度：與 headTier 同口径（kpD tier → 字母前綴 → markdown 層級），家族前綴分樹
+      const tier = headTier(t, hd[1].length);
+      const tag = '科' + fam + String(tier).padStart(2, '0');
+      // 家族根層（01）自宣告子鏈：UI buildTree 只認父實例的 t=，不然子層會淪為根級平舖
+      const selfT = tier === 1 && childChain ? ` t="${encodeXmlAttr(childChain)}"` : '';
+      t = t.replace(/\s*\^kpD\d+-\d+\s*$/, '').replace(/\^kp#[^\s（]*/g, '').trim();
+      // v9：披尋記標題改用原書干支寫法；字母退入 a= 屬性（不顯示、可查、可回退）。
+      // 匹配口徑與認領趟一致：先剝字母前綴得純標題再比對。
+      const bareTitle = t.replace(/^[A-Z]?\d*\s*/, '').trim();
+      const letter = (/^([A-Z]?\d*)\s*/.exec(t) || ['', ''])[1];
+      const gz = fam === '漢' && anchor ? labelOf.get(anchor) : undefined;
+      const disp = gz ? gz + bareTitle : t;
+      if (gz) renameCnt++;
+      const aAttr = gz && letter ? ` a="${encodeXmlAttr(letter)}"` : '';
+      // v10：標題自掛節聯＝點標題即捲動＋目錄游標同步（「點回同步樹」），鏈行自指段因此可併掉
+      let body = postInline(inline(disp));
+      if (anchor) { body = `<節聯 n="${encodeXmlAttr(base + '#' + anchor)}">${body}</節聯>`; jieCnt++; }
+      out.push(anchor ? `<${tag}${selfT} n="${encodeXmlAttr(anchor)}"${aAttr}>${body}</${tag}>` : `<${tag}${selfT}>${body}</${tag}>`);
+      continue;
+    }
+    // 校勘附編（-a）定義行：行尾 ` ^appID` → 行首 <錨 n/>，讓校注引用有落點（v7）
+    const ad = /^(?!#)(.*?)\s*\^(app[A-Za-z0-9_-]+)\s*$/.exec(ln);
+    if (ad && ad[2]) {
+      out.push(`<錨 n="${encodeXmlAttr(ad[2])}"/>` + inline(ad[1]!));
+      anchorCnt++;
+      continue;
+    }
+    // 去掉 markdown 粗體/斜體/行內碼標記（保留文字）
+    ln = ln.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g, '$1').replace(/`([^`]+)`/g, '$1');
+    const t = postInline(inline(ln)).replace(/[ \t]+$/, '');
+    out.push(t.trim() ? kemonLink(t, out.length) : t);
+  }
+  while (out.length && out[out.length - 1].trim() === '') out.pop();
+  return out;
+}
+
+// ---- 組裝 ----
+// 科判樹：篇＞章＞科01…科54（深度＝kpD tier）。照 taisho 模式：樹 t= 一次宣告全部層級，
+// 末端層級加 '.'；l= 列葉內容標籤（腳註）。內容標籤自己不帶 t=。
+const KE_TIERS = Array.from({ length: 54 }, (_, i) => '科' + String(i + 1).padStart(2, '0')).join(',');
+const lines: string[] = [];
+lines.push(`<集 t="集">${esc('瑜伽師地論漢文集成')}</集>`);
+// v5：每套科判一棵樹、一個頁籤（作者 2026-11-13）。主樹 t=（篇,章,科01…科54＝56 層）是
+// 全庫唯一最長鏈——nodeAnchorIndex 的命名空間（首標籤 篇）與卷級別名（第二層 章）都從它解析；
+// 16 個家族樹各 ≤54 層，嚴格短於主樹，不會搶走 nsTag。
+lines.push(`<隱><樹 s="*" l="註,釋" t="篇,章,${KE_TIERS}.">總目錄·瑜伽師地論科</樹></隱>`);
+for (const [ser, name] of WORKS) {
+  const fam = FAM[ser];
+  if (!fam) continue;                       // T1579 已在主樹
+  const mx = maxLevel.get(ser) ?? 0;
+  if (!mx) continue;
+  const tiers = Array.from({ length: mx }, (_, i) => '科' + fam + String(i + 1).padStart(2, '0')).join(',');
+  lines.push(`<隱><樹 s="*" t="${tiers}.">${esc(name)}科判</樹></隱>`);
+}
+const stats: string[] = [];
+let totalJie = 0, totalNotes = 0;
+for (const [ser, name] of WORKS) {
+  const files = picked.filter(p => p.ser === ser).sort((a, b) => a.vol - b.vol);
+  if (!files.length) continue;
+  lines.push('');
+  lines.push(`<篇 id="${encodeXmlAttr(ser)}" t="章">${esc(name)}（${esc(ser)}）</篇>`);
+  let nchap = 0;
+  for (const p of files) {
+    const label = p.kind === 'main' ? `卷第${p.vol}` : p.kind === 'k' ? '科判大綱' : '校勘附編';
+    lines.push(`<章 id="${encodeXmlAttr(p.base)}" t="${encodeXmlAttr(CHAIN[ser] || '科01.')}">${esc(label)}</章>`);
+    const bl = bodyLines(fs.readFileSync(path.join(ROOT, p.file), 'utf8'), FAM[p.ser] ?? '', famChildChain(ser), p.base);
+    totalJie += bl.filter(x => /^<科[一-鿿]?\d\d/.test(x)).length;
+    totalNotes += bl.filter(x => x.startsWith('<釋')).length;
+    for (const l of bl) lines.push(l);
+    nchap++;
+  }
+  stats.push(`${ser} ${name}: ${nchap} 章`);
+}
+
+console.log('=== 選檔 ===');
+console.log('  漢文系列', WORKS.length, '選入檔案', picked.length, '排除', rejected.length);
+console.log('  語言覆核异常（CJK<80%）:', langReport.length ? langReport.join(' | ') : '無');
+console.log('  節(科判標題)', totalJie, '釋(腳註)', totalNotes, '總行', lines.length);
+fs.writeFileSync(path.join(OUTDIR, 'ybh.xml'), lines.join('\n'), 'utf8');
+fs.writeFileSync(path.join(OUTDIR, 'build-report.txt'),
+  ['選入 ' + picked.length + ' 檔，排除 ' + rejected.length, '語言异常: ' + (langReport.join(' | ') || '無'),
+   '節 ' + totalJie + ' 釋 ' + totalNotes + ' 行 ' + lines.length, ...stats].join('\n'), 'utf8');
+
+const t0 = Date.now();
+const res = await authorAdb({
+  dbname: 'ybh', dbcname: '瑜伽師地論漢文集成', lines,
+  dropNumeric: true,
+  log: (m) => console.log('  ' + m),
+});
+const out = path.join(OUTDIR, 'ybh.adb');
+fs.writeFileSync(out, res.file);
+console.log(`built ${out}: ${(res.file.length / 1048576).toFixed(2)} MiB in ${Date.now() - t0} ms — ${res.lines} lines, ${res.tokens} tokens, tags: ${res.tagNames.join(' ')}`);
+console.log('cachedKeys:', res.cachedKeys.join(' '));
+console.log(`互鏈：節聯 ${jieCnt}（含標題自掛）、科文鏈聯 ${kemonCnt}、自指鏈行併除 ${selfMergeCnt}、梵漢引用不入庫 ${delRefCnt}、文字參照 ${textCnt}、<錨> ${anchorCnt}、干支改名 ${renameCnt}`);
+
+// ---- 產後驗收（驗收腳本本身也要被驗）：錨點逐條解析＋節點行核對＋已知負控 ----
+{
+  const rd = await AdbReader.open(new SyncIO(out));
+  const mp = new VaPaMapper(rd);
+  await mp.init();
+  const tagsC = rd.containers.get('tags')!;
+  const pianVa = await rd.decodeBlockList('tags', tagsC.names.indexOf('篇'));
+  const chapVa = await rd.decodeBlockList('tags', tagsC.names.indexOf('章'));
+  const chapLine = chapVa.map((v) => mp.edgeLine(v));
+
+  // works.tsv：篇 VA/行＋卷數（章 VA 落在篇區間內）
+  const wk = ['code\ttitle\tpianVA\tpianLine\tchapters'];
+  WORKS.forEach(([ser, name], i) => {
+    const lo = pianVa[i]!, hi = i + 1 < pianVa.length ? pianVa[i + 1]! : Infinity;
+    const nc = chapVa.filter((v) => v >= lo && v < hi).length;
+    wk.push(`${ser}\t${name}\t${lo}\t${mp.edgeLine(lo)}\t${nc}`);
+  });
+  fs.writeFileSync(path.join(OUTDIR, 'works.tsv'), wk.join('\n'), 'utf8');
+
+  // anchor-check.tsv：每個 節聯/嵌 目標 (1) 解析出 VA (2) 該 VA 的行含 n="值"（科 或 錨 通用）
+  const counts = new Map<string, number>();
+  for (const m of lines.join('\n').matchAll(/<節聯 n="([^"]+)"|<嵌 i="ybh\?([^"]+)"/g)) {
+    const k = m[1] ?? m[2]!;
+    counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  const rows: string[] = ['anchor\thits\tva\tline\theadcheck\tstatus'];
+  let ok = 0, bad = 0;
+  for (const [a, n] of counts) {
+    const info = await nodeAnchorInfo(rd, a);
+    if (!info) { bad++; rows.push(`${a}\t${n}\t\t\t\tFAIL:unresolved`); continue; }
+    const line = mp.edgeLine(info.va);
+    const raw = await mp.lineText(line);
+    const kp = a.split('#')[1] ?? '';
+    const good = raw.includes('n="' + kp + '"');
+    if (good) ok++; else bad++;
+    rows.push(`${a}\t${n}\t${info.va}\t${line}\t${raw.slice(0, 36).replace(/\s+/g, ' ')}\t${good ? 'OK' : 'FAIL:mismatch'}`);
+  }
+  // 驗收鉤子反轉：卷級 NS 現應解析且正中卷 1（d224efd 別名已上線）
+  const neg = await nodeAnchorInfo(rd, 'T1579-1#kpD03-001');
+  let negStatus = 'FAIL:別名未到';
+  if (neg) {
+    const raw = await mp.lineText(mp.edgeLine(neg.va));
+    negStatus = raw.includes('<科03 n="kpD03-001"') ? 'ALIAS-ARRIVED' : 'FAIL:ALIAS-wrongline';
+  }
+  rows.push(`T1579-1#kpD03-001\t-\t${neg?.va ?? ''}\t\t\t${negStatus}`);
+  // 語義回歸：篇級＝最後一筆、卷級＝該卷（d224efd 規格 §3）
+  const pLast = await nodeAnchorInfo(rd, 'T1579#kpD01-001');
+  const vFirst = await nodeAnchorInfo(rd, 'T1579-1#kpD01-001');
+  rows.push(`語義回歸 T1579#kpD01-001=${pLast?.va} vs T1579-1#kpD01-001=${vFirst?.va}\t\t\t${pLast && vFirst && pLast.va !== vFirst.va && pLast.va > vFirst.va ? 'OK(last≠first)' : 'FAIL:semantics'}`);
+  if ((pLast && vFirst && !(pLast.va !== vFirst.va && pLast.va > vFirst.va)) || negStatus !== 'ALIAS-ARRIVED') bad++;
+  // 正控：篇 id 解析
+  const pos = await nodeAnchorInfo(rd, 'PXJ-H#kpD03-001');
+  rows.push(`PXJ-H#kpD03-001\t-\t${pos?.va ?? ''}\t${pos ? mp.edgeLine(pos.va) : ''}\t\t${pos ? 'OK:control' : 'FAIL:control'}`);
+  fs.writeFileSync(path.join(OUTDIR, 'anchor-check.tsv'), rows.join('\n'), 'utf8');
+  console.log(`anchor-check：${counts.size} 種錨點、${ok} OK、${bad} FAIL；負控 卷級NS=${negStatus}；正控 PXJ-H#=${pos ? 'OK' : 'FAIL'}；語義回歸見 tsv 末行`);
+  if (bad > 0) console.log('⚠ 有 FAIL，看 anchor-check.tsv');
+}
