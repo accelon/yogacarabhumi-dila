@@ -14,7 +14,7 @@ import { authorAdb } from 'D:/2026/adb-converter/ts/src/adbauthor.ts';
 import { encodeXmlAttr, encodeXmlText } from 'D:/2026/adb-converter/ts/src/xml-entities.ts';
 import { AdbReader, SyncIO } from 'D:/2026/adb-converter/ts/src/accelon26/adb.ts';
 import { VaPaMapper } from 'D:/2026/adb-converter/ts/src/accelon26/vapa.ts';
-import { nodeAnchorInfo } from 'D:/2026/adb-converter/ts/src/accelon26/page-text.ts';
+import { nodeAnchorInfo, anchorVa } from 'D:/2026/adb-converter/ts/src/accelon26/page-text.ts';
 
 const ROOT = 'D:/2026/yogacarabhumi-dila';
 const OUTDIR = 'D:/2026/_scratch-ybh/ybh';
@@ -104,6 +104,19 @@ function famChildChain(ser: string): string {
 }
 const CHAIN: Record<string, string> = {};
 for (const [ser] of WORKS) CHAIN[ser] = famChain(ser);
+
+// P1 span 表：T1579 科判 → CBETA 頁欄（span-build.ts 產出；mode T/N=精確、I=插值）
+const spans = new Map<string, { page: string; mode: string }>();
+{
+  const sp = 'D:/2026/_scratch-ybh/spans-t1579.tsv';
+  if (fs.existsSync(sp)) {
+    for (const r of fs.readFileSync(sp, 'utf8').split('\n').slice(1)) {
+      const c = r.split('\t');
+      if (c.length >= 4 && c[2]) spans.set(`${c[0]}#${c[1]}`, { page: c[2]!, mode: c[3]! });
+    }
+  }
+}
+let taishoCnt = 0;
 
 // ---- 行轉換 ----
 const esc = encodeXmlText;
@@ -290,7 +303,11 @@ function bodyLines(text: string, fam: string, childChain: string, base: string):
       // v10：標題自掛節聯＝點標題即捲動＋目錄游標同步（「點回同步樹」），鏈行自指段因此可併掉
       let body = postInline(inline(disp));
       if (anchor) { body = `<節聯 n="${encodeXmlAttr(base + '#' + anchor)}">${body}</節聯>`; jieCnt++; }
-      out.push(anchor ? `<${tag}${selfT} n="${encodeXmlAttr(anchor)}"${aAttr}>${body}</${tag}>` : `<${tag}${selfT}>${body}</${tag}>`);
+      // P1：T1579 科判挂 CBETA 原文頁欄聯（走 聯 i= 途徑 → taisho 端吃反鏈）
+      const sp = fam === '' && anchor ? spans.get(`${base}#${anchor}`) : undefined;
+      let tail = '';
+      if (sp) { tail = `<聯 i="taisho?${encodeXmlAttr(sp.page)}">CBETA${sp.mode === 'I' ? '≈' : ''}</聯>`; taishoCnt++; }
+      out.push(anchor ? `<${tag}${selfT} n="${encodeXmlAttr(anchor)}"${aAttr}>${body}</${tag}>${tail}` : `<${tag}${selfT}>${body}</${tag}>${tail}`);
       continue;
     }
     // 校勘附編（-a）定義行：行尾 ` ^appID` → 行首 <錨 n/>，讓校注引用有落點（v7）
@@ -423,5 +440,18 @@ console.log(`互鏈：節聯 ${jieCnt}（含標題自掛）、科文鏈聯 ${kem
   rows.push(`PXJ-H#kpD03-001\t-\t${pos?.va ?? ''}\t${pos ? mp.edgeLine(pos.va) : ''}\t\t${pos ? 'OK:control' : 'FAIL:control'}`);
   fs.writeFileSync(path.join(OUTDIR, 'anchor-check.tsv'), rows.join('\n'), 'utf8');
   console.log(`anchor-check：${counts.size} 種錨點、${ok} OK、${bad} FAIL；負控 卷級NS=${negStatus}；正控 PXJ-H#=${pos ? 'OK' : 'FAIL'}；語義回歸見 tsv 末行`);
+  // P1 跨庫驗證：ybh 發出的每個 taisho 頁欄聯必須在 taisho.adb 解析得到
+  {
+    const pages = new Map<string, number>();
+    for (const m of lines.join('\n').matchAll(/<聯 i="taisho\?([^"]+)"/g)) pages.set(m[1]!, (pages.get(m[1]!) ?? 0) + 1);
+    const trd = await AdbReader.open(new SyncIO('D:/accelon3/taisho.adb'));
+    let tok = 0, tbad = 0;
+    for (const p of pages.keys()) {
+      const va = await anchorVa(trd, p);
+      if (va == null) { tbad++; if (tbad <= 5) console.log('  ⚠ taisho 頁欄解析失敗：' + p); } else tok++;
+    }
+    console.log(`P1 跨庫：taisho 頁欄 ${pages.size} 種、${taishoCnt} 條聯，解析 OK ${tok}、FAIL ${tbad}`);
+    if (tbad > 0) console.log('⚠ 有跨庫 FAIL');
+  }
   if (bad > 0) console.log('⚠ 有 FAIL，看 anchor-check.tsv');
 }
