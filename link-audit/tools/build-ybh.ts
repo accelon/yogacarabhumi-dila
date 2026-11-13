@@ -338,11 +338,11 @@ function bodyLines(text: string, fam: string, childChain: string, base: string):
 const KE_TIERS = Array.from({ length: 54 }, (_, i) => '科' + String(i + 1).padStart(2, '0')).join(',');
 const lines: string[] = [];
 lines.push(`<集 t="集">${esc('瑜伽師地論漢文集成')}</集>`);
-// v5：每套科判一棵樹、一個頁籤（作者 2026-11-13）。v15 再拆：第一棵＝純書目（篇,章），
-// 本論科判獨立一棵；主幹鏈（篇,章,科01…54＝56 層）仍是全庫最長——nsTag=篇／volTag=章
-// 的錨定不動。待 accelon26 落实 loadTree 封閉詞彙後，「總目錄」頁籤即只剩 17 書＋360 卷。
-lines.push(`<隱><樹 s="*" l="註,釋" t="篇,章.">總目錄</樹></隱>`);
-lines.push(`<隱><樹 s="*" t="篇,章,${KE_TIERS}.">瑜伽師地論科判</樹></隱>`);
+// v15.1：總目錄頁籤用獨立小詞彙（書目,卷次）——loadTree 鏈展開只讀本樹詞彙內的實例，
+// 讀不到 篇.t 的科判大鏈 → 開庫瞬間 377 行即見書目卷次（純資料端，不依賴 R8）。
+// 書目/卷次 是 篇/章 行內零寬自閉合標記（不影響渲染），卷次掛在 書目 下（書目 t="卷次."）。
+lines.push(`<隱><樹 s="*" t="書目,卷次.">總目錄</樹></隱>`);
+lines.push(`<隱><樹 s="*" l="註,釋" t="篇,章,${KE_TIERS}.">瑜伽師地論科判</樹></隱>`);
 for (const [ser, name] of WORKS) {
   const fam = FAM[ser];
   if (!fam) continue;                       // T1579 已在主樹
@@ -357,13 +357,13 @@ for (const [ser, name] of WORKS) {
   const files = picked.filter(p => p.ser === ser).sort((a, b) => a.vol - b.vol);
   if (!files.length) continue;
   lines.push('');
-  lines.push(`<篇 id="${encodeXmlAttr(ser)}" t="章,${KE_TIERS}">${esc(name)}（${esc(ser)}）</篇>`);
+  lines.push(`<篇 id="${encodeXmlAttr(ser)}" t="章,${KE_TIERS}"><書目 id="${encodeXmlAttr(ser)}" t="卷次."/>${esc(name)}（${esc(ser)}）</篇>`);
   let nchap = 0;
   for (const p of files) {
     const label = p.kind === 'main' ? `卷第${p.vol}` : p.kind === 'k' ? '科判大綱' : '校勘附編';
     // v14.2：章不再宣告子鏈——鏈由 篇 自宣告（封閉詞彙），主樹不再經 章.t 把 16 個
     // 家族鏈全拉進來（170k 行 → ~12k）。家族樹的嵌套靠 科X01 自宣告子鏈，不受影響。
-    lines.push(`<章 id="${encodeXmlAttr(p.base)}">${esc(label)}</章>`);
+    lines.push(`<章 id="${encodeXmlAttr(p.base)}"><卷次 id="${encodeXmlAttr(p.base)}"/>${esc(label)}</章>`);
     const bl = bodyLines(fs.readFileSync(path.join(ROOT, p.file), 'utf8'), FAM[p.ser] ?? '', famChildChain(ser), p.base);
     totalJie += bl.filter(x => /^<科[一-鿿]?\d\d/.test(x)).length;
     totalNotes += bl.filter(x => x.startsWith('<釋')).length;
