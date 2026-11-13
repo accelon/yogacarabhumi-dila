@@ -70,9 +70,15 @@ for (const p of picked) {
 const maxLevel = new Map<string, number>();   // ser → 用到的最深科判層（1..54）
 function headTier(title: string, hashes: number): number {
   const am = /\^(kpD(\d+)-\d+)/.exec(title);
-  const lm = /^([A-Z])\d/.exec(title.trim());
-  const tier = am ? +am[2]! : (lm ? lm[1]!.charCodeAt(0) - 64 : hashes);
-  return Math.max(1, Math.min(54, tier));
+  if (am) return Math.max(1, Math.min(54, +am[2]!));
+  const tt = title.trim();
+  const lm = /^([A-Z])\d/.exec(tt);
+  if (lm) return Math.max(1, Math.min(54, lm[1]!.charCodeAt(0) - 64));
+  // PXJ-H-k 大綱制：數字（1 本地分…）＝第一層；小寫字母 a/b/c＝第二層起
+  const sm = /^([a-z])\d*[ .、]/.exec(tt);
+  if (sm) return Math.max(1, Math.min(54, 2 + sm[1]!.charCodeAt(0) - 97));
+  if (/^[0-9]+[ .、]/.test(tt)) return 1;
+  return Math.max(1, Math.min(54, hashes));
 }
 for (const p of picked) {
   const t = fs.readFileSync(path.join(ROOT, p.file), 'utf8');
@@ -275,7 +281,9 @@ function bodyLines(text: string, fam: string, childChain: string, base: string):
     return hit ? outSegs.join('　') : line;
   }
   const out: string[] = [];
+  let rawLi = -1;
   for (const raw of text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').split('\n')) {
+    rawLi++;
     let ln = raw;
     // 腳註定義 [^n]: body → <釋 n="n">body</釋>
     const fd = ln.match(/^\s*\[\^([^\]]+)\]:\s?(.*)$/);
@@ -313,7 +321,9 @@ function bodyLines(text: string, fam: string, childChain: string, base: string):
         taishoCnt++;
         if (sp.js && sp.je) { tail += `<嵌 i="taisho?${encodeXmlAttr(sp.page)}" j="${sp.js}-${sp.je}" n="原文"/>`; embedJCnt++; }
       }
-      out.push(anchor ? `<${tag}${selfT} n="${encodeXmlAttr(anchor)}"${aAttr}>${body}</${tag}>${tail}` : `<${tag}${selfT}>${body}</${tag}>${tail}`);
+      out.push(anchor ? `<${tag}${selfT} n="${encodeXmlAttr(anchor)}"${aAttr}>${body}</${tag}>` : `<${tag}${selfT}>${body}</${tag}>`);
+      // v15.2：CBETA 聯/嵌移獨立行——併在標題行會被目錄 label 抽取連文字吞進標題（「甲三、攝釋分CBETA」）
+      if (sp) out.push(tail.trim());
       continue;
     }
     // 校勘附編（-a）定義行：行尾 ` ^appID` → 行首 <錨 n/>，讓校注引用有落點（v7）
@@ -326,7 +336,7 @@ function bodyLines(text: string, fam: string, childChain: string, base: string):
     // 去掉 markdown 粗體/斜體/行內碼標記（保留文字）
     ln = ln.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g, '$1').replace(/`([^`]+)`/g, '$1');
     const t = postInline(inline(ln)).replace(/[ \t]+$/, '');
-    out.push(t.trim() ? kemonLink(t, out.length) : t);
+    out.push(t.trim() ? kemonLink(t, rawLi) : t);
   }
   while (out.length && out[out.length - 1].trim() === '') out.pop();
   return out;
