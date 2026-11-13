@@ -165,6 +165,32 @@ const spans = new Map<string, { page: string; js: string; je: string; mode: stri
 }
 let taishoCnt = 0, embedJCnt = 0;
 
+// P2 注文段落 ref：注文各部釋文段 → 所釋原文 span（v18 一般化，取代 v17 只論釋一部）。
+// 三层由 span-build-zhu.ts（D 現掛／LCS 科判對齊／同子樹取窗／祖先繼承）＋ span-zhu.ts（A·K·Q 合併）產出：
+// 論釋等大部是義引，逐字只偶爾出現，故段落錨到所在科判的原文窗；窗全部沿用 spans-j-verified.tsv 已逐條驗過的座標。
+const prefs = new Map<string, Map<number, { page: string; js: string; je: string; mode: string }>>();
+let paraRefCnt = 0;
+{
+  const dir = 'D:/2026/_scratch-ybh';
+  for (const f of fs.readdirSync(dir).filter((x) => /^zhu-refs-.+\.tsv$/.test(x)).sort()) {
+    for (const r of fs.readFileSync(`${dir}/${f}`, 'utf8').split('\n').slice(1)) {
+      const c = r.split('\t');
+      if (c.length < 8 || !c[0] || !c[3]) continue;
+      const mode = c[6] ?? '';
+      if (mode === 'none' || mode === 'drop' || mode === 'dup') continue;     // 無錨／寧缺／重複者不出鏈
+      const m = prefs.get(c[0]!) ?? new Map<number, { page: string; js: string; je: string; mode: string }>();
+      m.set(+c[1]! - 1, { page: c[3]!, js: c[4] === '-1' ? '' : (c[4] ?? ''), je: c[5] === '-1' ? '' : (c[5] ?? ''), mode });
+      prefs.set(c[0]!, m);
+    }
+  }
+}
+
+// 展示端去重：同卷內「同一窗連著發」只留第一次（科判繼承會讓整部書數百段共用同一大綱窗，
+// 如《手記》429 段全落在 30p395c#56-304）；資料表 zhu-refs-*.tsv 仍保留逐段真相，只在建庫時收攏。
+const lastRef = new Map<string, string>();
+let paraDupCnt = 0;
+const shipped: string[] = ['base\tline\tmode\tkey'];
+
 // ---- 行轉換 ----
 const esc = encodeXmlText;
 function inline(s: string): string {
@@ -359,10 +385,12 @@ function bodyLines(text: string, fam: string, childChain: string, base: string, 
       let tail = '';
       if (sp) {
         // v14：有 j 窗者聯升級 #a-b（跨庫精確定位＋高亮）；插值/無窗者留純頁欄
-        const linkTo = sp.js && sp.je ? `${sp.page}#${sp.js}-${sp.je}` : sp.page;
+        // v18 修：`js && je` 會把 js==='0'（如 30p478b#0-80 卷首窗）誤當無窗 → 改字串空值判斷
+        const hasWin = sp.js !== '' && sp.je !== '';
+        const linkTo = hasWin ? `${sp.page}#${sp.js}-${sp.je}` : sp.page;
         tail = `<聯 i="taisho?${encodeXmlAttr(linkTo)}">CBETA</聯>`;
         taishoCnt++;
-        if (sp.js && sp.je) { tail += `<嵌 i="taisho?${encodeXmlAttr(sp.page)}" j="${sp.js}-${sp.je}" n="原文"/>`; embedJCnt++; }
+        if (hasWin) { tail += `<嵌 i="taisho?${encodeXmlAttr(sp.page)}" j="${sp.js}-${sp.je}" n="原文"/>`; embedJCnt++; }
       }
       out.push(anchor ? `<${tag}${selfT} n="${encodeXmlAttr(anchor)}"${aAttr}>${body}</${tag}>` : `<${tag}${selfT}>${body}</${tag}>`);
       // v15.2：CBETA 聯/嵌移獨立行——併在標題行會被目錄 label 抽取連文字吞進標題（「甲三、攝釋分CBETA」）
@@ -380,6 +408,24 @@ function bodyLines(text: string, fam: string, childChain: string, base: string, 
     ln = ln.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g, '$1').replace(/`([^`]+)`/g, '$1');
     const t = postInline(inline(ln)).replace(/[ \t]+$/, '');
     out.push(t.trim() ? kemonLink(t, rawLi) : t);
+    // P2：注文段落 ref——獨立行（v15.2 教訓：不可併入正文行，會被上層抽取吞進文字）
+    if (t.trim()) {
+      const pr = prefs.get(base)?.get(rawLi);
+      if (pr) {
+        const hasWin = pr.js !== '' && pr.je !== '';           // 注意 '0' 起點（如 30p478b#0-80）不可當 falsy 略過
+        const key = hasWin ? `${pr.page}#${pr.js}-${pr.je}` : pr.page;
+        if (key === lastRef.get(base)) paraDupCnt++;           // 同窗連發只留第一次（科判繼承常成串重複）
+        else {
+          lastRef.set(base, key);
+          const linkTo = hasWin ? `${pr.page}#${pr.js}-${pr.je}` : pr.page;
+          let tl = `<聯 i="taisho?${encodeXmlAttr(linkTo)}">所釋</聯>`;
+          taishoCnt++; paraRefCnt++;
+          if (hasWin) { tl += `<嵌 i="taisho?${encodeXmlAttr(pr.page)}" j="${pr.js}-${pr.je}" n="論文"/>`; embedJCnt++; }
+          out.push(tl);
+          shipped.push([base, rawLi + 1, pr.mode, key].join('\t'));
+        }
+      }
+    }
   }
   while (out.length && out[out.length - 1].trim() === '') out.pop();
   return out;
@@ -442,6 +488,8 @@ fs.writeFileSync(path.join(OUTDIR, 'ybh.xml'), lines.join('\n'), 'utf8');
 fs.writeFileSync(path.join(OUTDIR, 'build-report.txt'),
   ['選入 ' + picked.length + ' 檔，排除 ' + rejected.length, '語言异常: ' + (langReport.join(' | ') || '無'),
    '節 ' + totalJie + ' 釋 ' + totalNotes + ' 行 ' + lines.length, ...stats].join('\n'), 'utf8');
+// 實際入庫的段落 ref 清單（展示端去重後）——驗收腳本以此為準逐條回讀
+fs.writeFileSync('D:/2026/_scratch-ybh/zhu-refs-shipped.tsv', shipped.join('\n') + '\n', 'utf8');
 
 const t0 = Date.now();
 const res = await authorAdb({
@@ -453,7 +501,7 @@ const out = path.join(OUTDIR, 'ybh.adb');
 fs.writeFileSync(out, res.file);
 console.log(`built ${out}: ${(res.file.length / 1048576).toFixed(2)} MiB in ${Date.now() - t0} ms — ${res.lines} lines, ${res.tokens} tokens, tags: ${res.tagNames.join(' ')}`);
 console.log('cachedKeys:', res.cachedKeys.join(' '));
-console.log(`互鏈：節聯 ${jieCnt}、CBETA 聯 ${taishoCnt}、CBETA 行內嵌 ${embedJCnt}、自指鏈行併除 ${selfMergeCnt}、梵漢剝除 ${delRefCnt}、文字 ${textCnt}、<錨> ${anchorCnt}、干支改名 ${renameCnt}`);
+console.log(`互鏈：節聯 ${jieCnt}、CBETA 聯 ${taishoCnt}（內含注文段落 ref ${paraRefCnt}，另收攏同窗重複 ${paraDupCnt}）、CBETA 行內嵌 ${embedJCnt}、自指鏈行併除 ${selfMergeCnt}、梵漢剝除 ${delRefCnt}、文字 ${textCnt}、<錨> ${anchorCnt}、干支改名 ${renameCnt}`);
 
 // ---- 產後驗收（驗收腳本本身也要被驗）：錨點逐條解析＋節點行核對＋已知負控 ----
 {
