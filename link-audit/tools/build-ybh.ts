@@ -307,7 +307,9 @@ function bodyLines(text: string, fam: string, childChain: string, base: string):
       const sp = (fam === '' || fam === '漢') && anchor ? spans.get(`${base}#${anchor}`) : undefined;
       let tail = '';
       if (sp) {
-        tail = `<聯 i="taisho?${encodeXmlAttr(sp.page)}">CBETA</聯>`;
+        // v14：有 j 窗者聯升級 #a-b（跨庫精確定位＋高亮）；插值/無窗者留純頁欄
+        const linkTo = sp.js && sp.je ? `${sp.page}#${sp.js}-${sp.je}` : sp.page;
+        tail = `<聯 i="taisho?${encodeXmlAttr(linkTo)}">CBETA</聯>`;
         taishoCnt++;
         if (sp.js && sp.je) { tail += `<嵌 i="taisho?${encodeXmlAttr(sp.page)}" j="${sp.js}-${sp.je}" n="原文"/>`; embedJCnt++; }
       }
@@ -451,7 +453,7 @@ console.log(`互鏈：節聯 ${jieCnt}、CBETA 聯 ${taishoCnt}、CBETA 行內�
     const trd = await AdbReader.open(new SyncIO('D:/accelon3/taisho.adb'));
     let tok = 0, tbad = 0;
     for (const p of pages.keys()) {
-      const va = await anchorVa(trd, p);
+      const va = await anchorVa(trd, p);   // anchorVa 自會剝 #a-b 尾綴（probe-charpos 實證）
       if (va == null) { tbad++; if (tbad <= 5) console.log('  ⚠ taisho 頁欄解析失敗：' + p); } else tok++;
     }
     console.log(`P1 跨庫：taisho 頁欄 ${pages.size} 種、${taishoCnt} 條聯，解析 OK ${tok}、FAIL ${tbad}`);
