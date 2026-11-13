@@ -171,7 +171,7 @@ const ownWin = my.map((r, i) => {
       apOverrideN++;
       return { page: rw.sp.page, js: rw.sp.js, je: rw.sp.je, mode: mm!.kind + rw.src, note: `AP 距對齊窗 >2 欄，改採 ${mm!.kind}`, h: Hs[mm!.at], src: Hs[rw.at] };
     }
-    return { page: r.dw.page, js: r.dw.js, je: r.dw.je, mode: 'A' + (r.dl!.startsWith('T1579') ? 'T' : 'P'), note: `書內現掛 ${r.dl}`, h: mm ? Hs[mm.at] : undefined, src: rw ? Hs[rw.at] : undefined };
+    return { page: r.dw.page, js: r.dw.js, je: r.dw.je, mode: 'A' + (r.dl!.startsWith('T1579') ? 'T' : 'P'), note: `書內現掛 ${r.dl}`, h: mm ? Hs[mm.at] : undefined, src: rw ? Hs[rw.at] : undefined, dlLabel: r.dl!.includes('|') ? r.dl!.split('|').pop()! : r.dl! };
   }
   if (!mm) return { page: '', js: -1, je: -1, mode: 'no', note: '未對齊', h: undefined as H | undefined, src: undefined as H | undefined };
   if (!rw) return { page: '', js: -1, je: -1, mode: mm.kind + '?', note: '命中但子樹無窗', h: Hs[mm.at], src: undefined };
@@ -183,13 +183,13 @@ const audit: string[] = ['zhu_line\tzhu_kp\tzhu_title\tmode\t1579卷\t1579_kp\t1
 const tally: Record<string, number> = {};
 my.forEach((r, i) => {
   while (stack.length && my[stack[stack.length - 1]!]!.d >= r.d) stack.pop();
-  let rec = { base: r.base, kp: r.kp, page: ownWin[i]!.page, js: ownWin[i]!.js, je: ownWin[i]!.je, mode: ownWin[i]!.mode, title: r.title.trim(), srcTitle: ownWin[i]!.src?.raw?.trim() ?? '' };
+  let rec = { base: r.base, kp: r.kp, page: ownWin[i]!.page, js: ownWin[i]!.js, je: ownWin[i]!.je, mode: ownWin[i]!.mode, title: r.title.trim(), srcTitle: ownWin[i]!.src?.raw?.trim() ?? (ownWin[i] as any).dlLabel ?? '' };
   let note = ownWin[i]!.note;
   if (rec.js < 0) {
     for (let k = stack.length - 1; k >= 0; k--) {
       const a = ownWin[stack[k]!]!;
       if (a.js >= 0) {
-        rec = { base: r.base, kp: r.kp, page: a.page, js: a.js, je: a.je, mode: 'K', title: r.title.trim(), srcTitle: a.src?.raw?.trim() ?? '' };
+        rec = { base: r.base, kp: r.kp, page: a.page, js: a.js, je: a.je, mode: 'K', title: r.title.trim(), srcTitle: a.src?.raw?.trim() ?? (a as any).dlLabel ?? '' };
         note = `祖先 L${my[stack[k]!]!.line}「${my[stack[k]!]!.title.trim()}」`;
         break;
       }
