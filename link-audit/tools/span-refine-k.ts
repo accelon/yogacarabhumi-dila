@@ -40,8 +40,29 @@ const DRY = process.argv.includes('--dry');
 const argOf = (k: string): string | undefined => process.argv.find((x) => x.startsWith(k + '='))?.split('=')[1];
 const LIMIT = +(argOf('--limit') ?? '0');
 const ONLY = argOf('--only')?.split(',') ?? null;
-const AUDIT = argOf('--audit') ?? (SCR + '/zhu-refine-k' + (DRY ? '-dry' : '') + '-audit.csv');   // 並行分批時各給一個檔名，避免互相覆寫
 const NL = String.fromCharCode(10);
+/**
+ * --retry-audit：只重試「上次被驗證擋下」的行（審計 CSV 裡判定含『保留粗窗』者）。
+ * 母區 09d4625 修好 pageHanTextOf 越頁 bleeding ＋ renderEmbed 越界鉗製後，
+ * 這 514 條（465 窗長不符＋35 頁內定位失敗）值得重試；全量重掃則要再花 2 CPU 小時且多數結果不變。
+ */
+const RETRY = (() => {
+  const list = argOf('--retry-audit');
+  if (!list) return null;
+  const set = new Set<string>();
+  for (const raw of list.split(',')) {
+    const p = raw.trim();
+    const path = /[\\/]/.test(p) ? p : SCR + '/' + p;                  // 可給檔名或絕對路徑
+    if (!fs.existsSync(path)) continue;
+    for (const l of fs.readFileSync(path, 'utf8').split(NL).slice(1)) {
+      const c = l.split('\t');
+      if (c.length >= 8 && /保留粗窗/.test(c[7]!)) set.add(c[0] + '\t' + c[1]);
+    }
+  }
+  console.log('--retry-audit：鎖定被擋行 ' + set.size + ' 條');
+  return set;
+})();
+const AUDIT = argOf('--audit') ?? (SCR + '/zhu-refine-k' + (DRY ? '-dry' : '') + '-audit.csv');   // 並行分批時各給一個檔名，避免互相覆寫
 fs.writeFileSync(AUDIT, '' + ['卷檔', '段起行', '所在科判', '舊粗窗', '新逐字窗', '牒文', '段落前24字', '判定'].join('\t') + NL, 'utf8');
 
 const han = (x: string) => hanChars(x.replace(/<[^>]*>/g, '')).join('');
@@ -85,7 +106,7 @@ function mdOf(base: string): string[] {
 }
 
 type Row = { cells: string[]; base: string; line: number; page: string; js: number; je: number; quote: string };
-const files = fs.readdirSync(SCR).filter((x) => /^zhu-refs-.+\.tsv$/.test(x)).sort();
+const files = fs.readdirSync(SCR).filter((x) => /^zhu-refs-.+\.tsv$/.test(x) && !/\.pre-refine\.tsv$/.test(x) && !/shipped/.test(x)).sort();
 let nK = 0, nRefined = 0, nKept = 0;
 const t0 = Date.now();
 for (const f of files) {
@@ -98,6 +119,7 @@ for (const f of files) {
     if (i === 0 || !l.trim()) return;
     const c = l.split('\t');
     if (c.length < 8 || c[6] !== 'K') return;
+    if (RETRY && !RETRY.has(c[0] + '\t' + c[1])) return;          // 只重試上次被擋下的行
     rows.push({ cells: c, base: c[0]!, line: +c[1]!, page: c[3]!, js: +c[4]!, je: +c[5]!, quote: c[7] ?? '' });
   });
   if (!rows.length) continue;
@@ -136,12 +158,20 @@ for (const f of files) {
       }
     }
     if (!found) continue;
-    const b = found, q = txt.slice(b.start, b.start + b.len), oldKey = r.page + '#' + r.js + '-' + r.je;
+    const b = found;
+    let q = txt.slice(b.start, b.start + b.len);
+    const oldKey = r.page + '#' + r.js + '-' + r.je;
     const head = [r.base, r.line, r.quote.split('→')[0], oldKey];
     const ph = await phOf(b.page);
-    const js = ph.indexOf(q);
-    if (js < 0) { nKept++; audit.push([...head, b.page, q, txt.slice(0, 24), '頁內定位失敗→保留粗窗'].join('\t')); continue; }
-    const je = Math.min(js + b.len, ph.length);
+    let js = ph.indexOf(q), crossPage = false;
+    if (js < 0) {
+      // 跨頁牒文：母區修好後頁字串只在頁尾截斷，整句 indexOf 會失敗。
+      // 若前 8 字在本頁內且本頁還剩 ≥6 字，就**鉗到頁尾**發半句（產品現行行為即如此）。
+      const hp = ph.indexOf(q.slice(0, 8));
+      if (hp < 0 || ph.length - hp < 6) { nKept++; audit.push([...head, b.page, q, txt.slice(0, 24), '頁內定位失敗→保留粗窗'].join('\t')); continue; }
+      js = hp; q = q.slice(0, ph.length - hp); crossPage = true;
+    }
+    const je = Math.min(js + han(q).length, ph.length);
     if (b.page === r.page && js === r.js && je === r.je) { lastVa = b.va; continue; }          // 本就同窗
     const res = await renderEmbed('taisho', b.page, '', js + '-' + je, '', false, rd as any);
     const mark = han(/<mark class="xrefHit">([\s\S]*?)<\/mark>/.exec(res.html)?.[1] ?? '');
@@ -155,7 +185,7 @@ for (const f of files) {
     const idx = lineIdx.get(r.base + '\t' + r.line);
     if (idx !== undefined && idx > 0) lines[idx] = r.cells.join('\t');
     nRefined++;
-    audit.push([...head, b.page + '#' + js + '-' + je, q, txt.slice(0, 24), b.uniq ? '換窗（全書唯一）' : '換窗（同頁帶）'].join('\t'));
+    audit.push([...head, b.page + '#' + js + '-' + je, q, txt.slice(0, 24), (crossPage ? '換窗（跨頁鉗到頁尾）' : b.uniq ? '換窗（全書唯一）' : '換窗（同頁帶）')].join('\t'));
   }
   fs.appendFileSync(AUDIT, audit.length ? audit.join(NL) + NL : '', 'utf8');
   console.log('  ' + f + '：K ' + work.length + ' 條｜累計換窗 ' + nRefined + '、保留 ' + nKept + '｜' + ((Date.now() - t0) / 1000).toFixed(0) + 's');
