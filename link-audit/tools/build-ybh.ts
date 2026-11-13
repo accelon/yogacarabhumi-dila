@@ -109,6 +109,7 @@ const mirrorNorm = (s: string) => s
   .replace(/^\s*(?:[甲乙丙丁戊己庚辛壬癸子丑寅卯辰巳午未申酉戌亥][一二三四五六七八九十]{1,3}、|[A-Za-z][0-9]*[ .、]?)/, '')
   .replace(/[0-9０-９\s　、，。：；（）()·「」『』?？]/g, '').slice(0, 10);
 const outlineTiers = new Map<string, number[]>();   // ser → 大綱每行 tier（鏡像合格＝主卷序列）
+const outlineKeys = new Map<string, string[]>();    // ser → 大綱每行對應的「主卷節點」base#kp（v24：大綱也能融合論本）
 const mirrorOK = new Map<string, boolean>();
 for (const [ser] of WORKS) {
   const kf = picked.find(p => p.ser === ser && p.kind === 'k');
@@ -117,10 +118,12 @@ for (const [ser] of WORKS) {
   for (const m of fs.readFileSync(path.join(ROOT, kf.file), 'utf8').matchAll(/^(#{1,6})\s+(.*)$/gm)) {
     kl.push(headTier(m[2]!, m[1]!.length)); kt.push(mirrorNorm(m[2]!));
   }
-  const mt: string[] = []; const msT: number[] = [];
+  const mt: string[] = []; const msT: number[] = []; const mk: string[] = [];
   for (const p of picked.filter(p2 => p2.ser === ser && p2.kind === 'main').sort((a, b) => a.vol - b.vol)) {
     for (const m of fs.readFileSync(path.join(ROOT, p.file), 'utf8').matchAll(/^(#{1,6})\s+(.*)$/gm)) {
       msT.push(headTier(m[2]!, m[1]!.length)); mt.push(mirrorNorm(m[2]!));
+      const kp = /\^(kpD\d+-\d+)/.exec(m[2]!);            // 主卷這條的節點錨（大綱沒有錨，靠鏡像位借）
+      mk.push(kp ? `${p.base}#${kp[1]}` : '');
     }
   }
   let ok = false;
@@ -131,6 +134,7 @@ for (const [ser] of WORKS) {
   }
   mirrorOK.set(ser, ok);
   outlineTiers.set(ser, ok ? msT : kl);
+  outlineKeys.set(ser, ok ? mk : []);
   const ofam = '大' + (FAM[ser] ?? '');
   maxLevel.set(ofam, Math.max(...(ok ? msT : kl), 1));
 }
@@ -217,7 +221,7 @@ const fusions = new Map<string, { nodeKey: string; label: string }>();
     }
   }
 }
-let fusionCnt = 0;
+let fusionCnt = 0, outlineFusionCnt = 0;
 
 // 展示端去重：同卷內「同一窗連著發」只留第一次（科判繼承會讓整部書數百段共用同一大綱窗，
 // 如《手記》429 段全落在 30p395c#56-304）；資料表 zhu-refs-*.tsv 仍保留逐段真相，只在建庫時收攏。
@@ -299,7 +303,7 @@ let delRefCnt = 0, selfMergeCnt = 0;
 function postInline(s: string): string {
   return s.replace(/《\u0001》/g, '').replace(/\u0001/g, '');
 }
-function bodyLines(text: string, fam: string, childChain: string, base: string, mirror?: number[]): string[] {
+function bodyLines(text: string, fam: string, childChain: string, base: string, mirror?: number[], outlineMain?: string[]): string[] {
   let mi = 0;
   // 兩趟（v8.1）：天干地支序號是「父內」編號（每換一個上級父即復位），不等於 kpD 卷內流水號，
   // 故先按標題縮排做樹走訪重算父內序，得 (tier, 父內序) → 標題；再逐段匹配（同序多候選時比標題文字）。
@@ -399,6 +403,7 @@ function bodyLines(text: string, fam: string, childChain: string, base: string, 
       // 深度：與 headTier 同口径（kpD tier → 字母前綴 → markdown 層級），家族前綴分樹
       const tier = mirror && mi < mirror.length ? mirror[mi++] : headTier(t, hd[1].length);
       if (!mirror) mi++;
+      const mirrorIdx = mi - 1;                                   // 大綱行 → 主卷同位節點的下標
       const tag = '科' + fam + String(tier).padStart(2, '0');
       // 家族根層（01）自宣告子鏈：UI buildTree 只認父實例的 t=，不然子層會淪為根級平舖
       const selfT = tier === 1 && childChain ? ` t="${encodeXmlAttr(childChain)}"` : '';
@@ -438,6 +443,16 @@ function bodyLines(text: string, fam: string, childChain: string, base: string, 
         if (fu) {
           out.push(`<融 i="ybh?${encodeXmlAttr(fu.nodeKey)}" n="論文・${encodeXmlAttr(fu.label)}" max="24"></融>`);
           fusionCnt++;
+        }
+      } else if (outlineMain && outlineMain.length > mirrorIdx) {
+        // v24 大綱樹融合：-k 行自己無錨，靠 v16 的鏡像同位關係借用主卷那一行的節點——
+        // 主卷是 T1579 → 直接指向論本；是別部科文 → 用它對齊到的論本節點（兩跳，皆實據）。
+        const mainKey = outlineMain[mirrorIdx];
+        const tgt = mainKey ? (mainKey.startsWith('T1579-') ? mainKey : (fusions.get(mainKey)?.nodeKey ?? '')) : '';
+        if (tgt) {
+          const lab = (outlineMain && fusions.get(mainKey!)?.label) || bareTitle;
+          out.push(`<融 i="ybh?${encodeXmlAttr(tgt)}" n="論文・${encodeXmlAttr(lab)}" max="24"></融>`);
+          outlineFusionCnt++;
         }
       }
       continue;
@@ -516,7 +531,7 @@ for (const [ser, name] of WORKS) {
     // v14.2：章不再宣告子鏈——鏈由 篇 自宣告（封閉詞彙），主樹不再經 章.t 把 16 個
     // 家族鏈全拉進來（170k 行 → ~12k）。家族樹的嵌套靠 科X01 自宣告子鏈，不受影響。
     lines.push(`<章 id="${encodeXmlAttr(p.base)}"><卷次 id="${encodeXmlAttr(p.base)}"/>${esc(label)}</章>`);
-    const bl = bodyLines(fs.readFileSync(path.join(ROOT, p.file), 'utf8'), famOf(p), famChildChain(famOf(p)), p.base, p.kind === 'k' ? outlineTiers.get(ser) : undefined);
+    const bl = bodyLines(fs.readFileSync(path.join(ROOT, p.file), 'utf8'), famOf(p), famChildChain(famOf(p)), p.base, p.kind === 'k' ? outlineTiers.get(ser) : undefined, p.kind === 'k' ? outlineKeys.get(ser) : undefined);
     totalJie += bl.filter(x => /^<科[一-鿿]?\d\d/.test(x)).length;
     totalNotes += bl.filter(x => x.startsWith('<釋')).length;
     for (const l of bl) lines.push(l);
@@ -546,7 +561,7 @@ const out = path.join(OUTDIR, 'ybh.adb');
 fs.writeFileSync(out, res.file);
 console.log(`built ${out}: ${(res.file.length / 1048576).toFixed(2)} MiB in ${Date.now() - t0} ms — ${res.lines} lines, ${res.tokens} tokens, tags: ${res.tagNames.join(' ')}`);
 console.log('cachedKeys:', res.cachedKeys.join(' '));
-console.log(`互鏈：節聯 ${jieCnt}、CBETA 聯 ${taishoCnt}（科判行 ${taishoCnt - paraRefCnt}＝v19 新增他家族 ${kepanZhuCnt}＋注文段落 ref ${paraRefCnt}，另收攏同窗重複 ${paraDupCnt}）、CBETA 行內嵌 ${embedJCnt}、**P4 <融> ${fusionCnt} 枚**、自指鏈行併除 ${selfMergeCnt}、梵漢剝除 ${delRefCnt}、文字 ${textCnt}、<錨> ${anchorCnt}、干支改名 ${renameCnt}`);
+console.log(`互鏈：節聯 ${jieCnt}、CBETA 聯 ${taishoCnt}（科判行 ${taishoCnt - paraRefCnt}＝v19 新增他家族 ${kepanZhuCnt}＋注文段落 ref ${paraRefCnt}，另收攏同窗重複 ${paraDupCnt}）、CBETA 行內嵌 ${embedJCnt}、**P4 <融> ${fusionCnt} 枚（大綱樹另 ${outlineFusionCnt} 枚）**、自指鏈行併除 ${selfMergeCnt}、梵漢剝除 ${delRefCnt}、文字 ${textCnt}、<錨> ${anchorCnt}、干支改名 ${renameCnt}`);
 
 // ---- 產後驗收（驗收腳本本身也要被驗）：錨點逐條解析＋節點行核對＋已知負控 ----
 {
