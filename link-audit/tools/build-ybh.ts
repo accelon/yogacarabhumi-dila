@@ -356,11 +356,13 @@ for (const [ser, name] of WORKS) {
   const files = picked.filter(p => p.ser === ser).sort((a, b) => a.vol - b.vol);
   if (!files.length) continue;
   lines.push('');
-  lines.push(`<篇 id="${encodeXmlAttr(ser)}" t="章">${esc(name)}（${esc(ser)}）</篇>`);
+  lines.push(`<篇 id="${encodeXmlAttr(ser)}" t="章,${KE_TIERS}">${esc(name)}（${esc(ser)}）</篇>`);
   let nchap = 0;
   for (const p of files) {
     const label = p.kind === 'main' ? `卷第${p.vol}` : p.kind === 'k' ? '科判大綱' : '校勘附編';
-    lines.push(`<章 id="${encodeXmlAttr(p.base)}" t="${encodeXmlAttr(CHAIN[ser] || '科01.')}">${esc(label)}</章>`);
+    // v14.2：章不再宣告子鏈——鏈由 篇 自宣告（封閉詞彙），主樹不再經 章.t 把 16 個
+    // 家族鏈全拉進來（170k 行 → ~12k）。家族樹的嵌套靠 科X01 自宣告子鏈，不受影響。
+    lines.push(`<章 id="${encodeXmlAttr(p.base)}">${esc(label)}</章>`);
     const bl = bodyLines(fs.readFileSync(path.join(ROOT, p.file), 'utf8'), FAM[p.ser] ?? '', famChildChain(ser), p.base);
     totalJie += bl.filter(x => /^<科[一-鿿]?\d\d/.test(x)).length;
     totalNotes += bl.filter(x => x.startsWith('<釋')).length;
