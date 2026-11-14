@@ -924,3 +924,17 @@ v24 實跑全綠：①含 `融` true｜②21,975 枚成對空殼、0 自閉合�
 4. 目標庫未開時狀態欄出現「**融視圖：請先開啟 ys.adb（保留原文）**」＝V7 回退＋warn 正確，正文保留不被清空白。
 
 **三、必須如實交代的兩點**。① 上面第 3、4 點的畫面證據出自**被還原的上一個工作階段庫（fuyan 的 ys.adb）**，不是 ybh——因為 app 的「最近開啟」狀態存在 WebView2 profile 之外，我换了自用 profile 仍被還原。所以「融視圖在新 exe 可用」已被證實，但「**ybh.adb 自己的 `<融>` 在 exe 內被填入**」這一格我還沒有直接證據（headless 端已有：250/250 取段可填）。要補這一格，得先把 app 的最近檔案清單指回 ybh 或關掉現有實例再測——这需要跟使用者確認，我不擅自動別人線的狀態。② 我那份測試腳本最初的 PASS 判據寫錯了（只數 `已填>0`，沒驗來源錨屬於 ybh），已發現； corrected 版要求來源字串以 `ybh?` 開頭才算數。
+
+### 16.31 新 exe 上機實測融視圖（2026-11-14，截圖存 `data/exe-fusion-on.png`／`data/exe-r7-drawer.png`）
+
+**靜態**：現行 `D:\accelon3\accelon26.exe`（11-14 11:31，18.50 MiB，sha `45e4a19e…`）內含 `fusionWrap`×3、`fusionBlock`×4、`initFusion`×4、`setFusionView`×2、`hasFusionTag`×2、`IntersectionObserver`×4、`embedSrc`×8、R7 的 `revShowAll`×3／`revMore`×3；且 **`wails/assets/index.html` 現行檔（sha `a148d199…`）逐位元組嵌在 exe 內**——我讀的碼就是它跑的碼。（測程中 exe 又換过一次：09:40→10:08 版→11:31，故兩輪都查過。）
+
+**動態**（真的啟動 exe，用母區 `ts/tools/_cdp.ts` 的 `Cdp.attach`／`loadAdb` 驅動；`ACCELON26_DEBUG_PORT`＋自用 `ACCELON26_WEBVIEW_DIR`，不碰使用者正在跑的實例 PID 14408）：
+1. 左欄出現核取框「**以科文融合顯示**」，勾選後狀態欄右側顯示「**融視圖：請先開啟 ys.adb（保留原文）**」＝**V7 缺庫回退＋warn 在真 app 裡運作**，正文保留不清空（截圖可證）。
+2. 開啟後 DOM 生成 **127 個 `.fusionBlock` 色帶殼**，其中**視野內 4 個全部填入真內容**（例：來源 `ys?38pa001a` →「在《中觀今論》中說：…」），視野外 123 個留空＝**V10 延遲取段按設計運作**。我最初回報的「殼 4、已填 0」就是這個原因（那 4 個在視窗外），**不是缺陷，已更正**。
+3. active db 是內建說明手冊那一刻 `#fusionWrap.hidden === true`＝**`hasFusionTag` 顯隱邏輯生效**。
+4. 關回 OFF，殼全部消失（可逆）。
+
+**尚未验成的**：R7「一排 >40 顆只列 20＋顯示全部」與抽屜 200／頁——字串在檔（`revShowAll`/`revMore`），但我幾次導航都停在「正文沒有跨庫聯可點」的狀態（大綱節點無聯、或 session 還原成別庫），需要一條能穩定落到 taisho `30p279a` 那一欄的路徑再驗；這格留待下一輪。
+
+**兩點必須交代**：① 上面 1、2 的畫面證據出自 **session 還原出來的 fuyan 線 `ys.adb`**（不是 ybh）——app 的最近開啟狀態不在我用自用的 WebView2 目錄裡；已查 `D:\accelon3\settings.json` **mtime 仍是 11-01 16:15，我的測試沒動到共用設定**。故「融視圖在新 exe 可用」已證，「ybh 自己的 `<融>` 在 exe 內被填」這一格只有 headless 證據（250/250 可填），畫面格待補。② 我的測試在scratch 留下 6 個 WebView2 profile（約 411 MB），列出待清。
