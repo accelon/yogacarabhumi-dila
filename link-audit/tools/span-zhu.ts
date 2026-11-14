@@ -39,6 +39,7 @@ const FULL_Q = ['T1580', 'T2801', 'T2259'].includes(SER);
 const DEDUPE = SER === 'PXJ-H';                    // 科判行已發鏈的部，段落不重複
 const QMARK_ONLY = SER === 'T1828';                // 通篇引文的部：Q 只吃 曰/云 標記（成本控制）
 const Q_MAX = 800;                                 // Q 層嘗試數上限（防跑不完）
+const argOfNum = (k: string): string | undefined => process.argv.find((x) => x.startsWith(k + '='))?.split('=')[1];
 
 const rd = await AdbReader.open(new SyncIO('D:/accelon3/taisho.adb'));
 const s = new SearchSession(rd);
@@ -123,7 +124,10 @@ async function slide(p: Para, from: number, txt?: string) {
   const T = txt ?? p.text;
   tried++;
   let hitVa = -1, start = -1, len = 0;
-  search: for (let st = from; st + 8 <= T.length && st <= from + 16; st++) {
+  // 掃描窗寬：預設只摸段前 16 字（論釋/論記的牒文多在段首）；
+  // 問答體（T2259）引文常埋在問句中後段，用 --wide=N --wstep=M 放寬。
+  const WIDE = +(argOfNum('--wide') ?? '16'), STEP = +(argOfNum('--wstep') ?? '1');
+  search: for (let st = from; st + 8 <= T.length && st <= from + WIDE; st += STEP) {
     for (const K of [24, 18, 14, 10, 8]) {
       const cand = T.slice(st, st + K);
       if (cand.length < 8) continue;
